@@ -12,7 +12,7 @@ for cheaper on Ali Express or similar - I am fortunate to have a robotics club t
 
 - 12v to 5v buck converter
 - Breadboard
-- 12v power supply
+- 12v 3a power supply
 - [58mm thermal printer](https://www.amazon.com/Maikrt-Embedded-Microcontroller-Secondary-Development/dp/B09YGVPPWV)
 - [WEMOS D1 Mini](https://www.amazon.com/Hosyond-Wireless-Internet-Development-Compatible/dp/B09SPYY61L)
 
@@ -31,12 +31,12 @@ Besides 3D printing the models, the wiring is fairly straightforward.
 Here are the connections neccesary:
 - Buck Converter -> Breadboard: positive goes to positive, negative to negative
 - Breadboard Power Rails -> D1 Mini: Positive to 5v, negative to ground
-- Printer Power -> Power Rails: positive to positive, negative to negatove
+- Printer Power -> Power Rails: positive to positive, negative to negative
 - Printer TTL -> Breadboard: ground to ground, RX to GPIO 16, TX to GPIO 14
 - Big Button -> Breadboard: positive to reset, negative to ground
 
-Your power supply should supply 12v into the Buck Converter and at least 3 amps. 
-If you have a powersupply with 5 volts and 3 (or more) amps, the buck converter can be skipped.
+Your power supply should supply 12v into the buck converter and at least 3 amps. 
+If you have a power supply with 5 volts and 3 (or more) amps, the buck converter can be skipped.
 
 # Disclaimer
 I am fairly new to this whole electronics thing, lots of things can (and probably will) be improved.
