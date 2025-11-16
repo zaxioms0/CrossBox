@@ -7,3 +7,4 @@ lib/
 test/
 include/
 .vscode/
+src/creds.h
