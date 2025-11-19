@@ -336,7 +336,7 @@ void writeBoardRow(int row, GridData grid_data) {
     }
 }
 
-void printGrid(GridData grid_data) {
+void printGrid(GridData grid_data, bool dump_bytes = false) {
     int tmp = board_px;
     for (int i = 0; i < tmp / 8; i++) {
         if (board_px % grid_data.width == 0) {
@@ -348,10 +348,12 @@ void printGrid(GridData grid_data) {
     Serial.println(board_px / grid_data.width);
     for (int i = 0; i < grid_data.height; i++) {
         writeBoardRow(i, grid_data);
-        // for (int j = 0; j < (board_px * board_px / grid_data.width / 8); j++)
-        // {
-        //     Serial.printf("0x%02x ", scratch[j]);
-        // }
+        if (dump_bytes) {
+            for (int j = 0; j < (board_px * board_px / grid_data.width / 8);
+                 j++) {
+                Serial.printf("0x%02x ", scratch[j]);
+            }
+        }
         printer.printBitmap(board_px, board_px / grid_data.width,
                             (unsigned char *)scratch, true);
     }
@@ -450,7 +452,7 @@ void setup() {
     GridData data = getGridData();
     printer.begin();
     // printHeader(data);
-    // printGrid(data);
+    printGrid(data);
     // printClues(data);
 }
 
