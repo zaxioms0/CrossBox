@@ -4,26 +4,42 @@
 #include <HTTPClient.h>
 #include <WiFi.h>
 #include <WiFiClientSecure.h>
+#include <WiFiManager.h>
 #include <creds.h>
 #include <nums.h>
 #include <time.h>
 #include <vector>
 
+// #define DEBUG_ESP_PORT Serial
+// #define HTTPCLIENT_ESP8266_DEBUG
+
 // RX, TX
 // SoftwareSerial printer_serial(14, 16);
 Adafruit_Thermal printer(&Serial1);
 int board_px = 384;
-const int scratch_size = 4400;
+// const int scratch_size = 1 << 13; // 8kb
+const int scratch_size = 1 << 15;
+
 char scratch[scratch_size] = "{\"cells\":";
+struct SquareData {
+    unsigned char row;
+    unsigned char col;
+    unsigned char data;
+};
+
+struct ClueData {
+    unsigned char num;
+    String data;
+};
 
 struct GridData {
     int height;
     int width;
     std::vector<String> authors;
     // ((x, y), data)
-    std::vector<std::pair<std::pair<int, int>, int>> square_data;
-    std::vector<std::pair<int, String>> across_clues;
-    std::vector<std::pair<int, String>> down_clues;
+    std::vector<SquareData> square_data;
+    std::vector<ClueData> across_clues;
+    std::vector<ClueData> down_clues;
 };
 
 void printGridData(GridData d) {
@@ -38,18 +54,17 @@ void printGridData(GridData d) {
     Serial.println();
     Serial.print("Data: ");
     for (auto p : d.square_data) {
-        Serial.printf("<(%d, %d) : %d> ", p.first.first, p.first.second,
-                      p.second);
+        Serial.printf("<(%d, %d) : %d> ", p.row, p.col, p.data);
     }
     Serial.println();
     Serial.println("Across:");
     for (auto p : d.across_clues) {
-        Serial.printf("%d: %s\n", p.first, p.second.c_str());
+        Serial.printf("%d: %s\n", p.num, p.data.c_str());
     }
     Serial.println();
     Serial.println("Down:");
     for (auto p : d.down_clues) {
-        Serial.printf("%d: %s\n", p.first, p.second.c_str());
+        Serial.printf("%d: %s\n", p.num, p.data.c_str());
     }
 }
 
@@ -76,6 +91,7 @@ int readStreamUntil(WiFiClient *stream, const char *match, int match_len,
            (!buffer || (idx < buffer_len))) {
         if (stream->available()) {
             char c = stream->read();
+            // Serial.print(c);
             if (c == match[i]) {
                 i += 1;
             } else {
@@ -106,21 +122,34 @@ GridData getGridData() {
     Serial.println(url);
 
     http.setFollowRedirects(HTTPC_STRICT_FOLLOW_REDIRECTS);
+    // http.addHeader("User-Agent", "Mozilla/5.0");
+    // client.setCACert(root_ca);
     client.setInsecure();
     http.begin(client, url);
 
-    delay(1000);
+    delay(500);
     int httpResponseCode = http.GET();
     if (httpResponseCode == 403) {
+        WiFiClientSecure client;
+        HTTPClient http;
+        http.setFollowRedirects(HTTPC_STRICT_FOLLOW_REDIRECTS);
+        http.addHeader("User-Agent", "Mozilla/5.0");
+        client.setCACert(root_ca);
         // try again with tomorrow's date
         configTime((24 - 4) * 60 * 60, 0, "time.google.com");
         getDateString(date, false);
+        // configTime(-4 * 60 * 60, 0, "time.google.com");
+        // struct tm timeinfo;
+        // getLocalTime(&timeinfo);
+
         sprintf(url,
                 "https://www.nytimes.com/svc/crosswords/v6/puzzle/mini/%s.json",
                 date);
+        Serial.println("Trying again with tomorrow's date");
         http.begin(client, url);
         delay(1000);
         httpResponseCode = http.GET();
+        Serial.printf("New response code: %d\n", httpResponseCode);
     }
 
     if (httpResponseCode != 200) {
@@ -170,13 +199,22 @@ GridData getGridData() {
     for (int j = 0; j < data.height; j++) {
         for (int i = 0; i < data.width; i++) {
             int idx = i + data.width * j;
+
             if (doc["cells"][idx] &&
                 doc["cells"][idx].as<JsonObject>().size() == 0) {
-                data.square_data.push_back({{i, j}, 0});
+                SquareData d;
+                d.row = j;
+                d.col = i;
+                d.data = 0;
+                data.square_data.push_back(d);
             } else if (doc["cells"][idx]["label"]) {
                 int label =
                     atoi(doc["cells"][idx]["label"].as<String>().c_str());
-                data.square_data.push_back({{i, j}, label});
+                SquareData d;
+                d.row = j;
+                d.col = i;
+                d.data = label;
+                data.square_data.push_back(d);
             }
         }
     }
@@ -184,10 +222,13 @@ GridData getGridData() {
         String direction = clue["direction"].as<String>();
         int label = atoi(clue["label"].as<String>().c_str());
         String text = clue["text"][0]["plain"].as<String>();
+        ClueData c;
+        c.num = label;
+        c.data = text;
         if (strcmp(direction.c_str(), "Across") == 0) {
-            data.across_clues.push_back({label, text});
+            data.across_clues.push_back(c);
         } else {
-            data.down_clues.push_back({label, text});
+            data.down_clues.push_back(c);
         }
     }
     doc.clear();
@@ -293,8 +334,8 @@ void writeBoardRow(int row, GridData grid_data) {
     memset(scratch, 0, scratch_size);
     writeOutline(square_dim, grid_data.width);
     for (auto p : grid_data.square_data) {
-        if (p.first.second == row) {
-            writeSquare(p.first.first, square_dim, p.second);
+        if (p.row == row) {
+            writeSquare(p.col, square_dim, p.data);
         }
     }
 }
@@ -307,10 +348,10 @@ void printGrid(GridData grid_data) {
         }
         board_px -= 8;
     }
-    // Serial.printf("Board px: %d\n", board_px);
+    Serial.println(board_px);
+    Serial.println(board_px / grid_data.width);
     for (int i = 0; i < grid_data.height; i++) {
         writeBoardRow(i, grid_data);
-        // Serial.println(board_px / grid_data.width);
         // for (int j = 0; j < (board_px * board_px / grid_data.width / 8); j++)
         // {
         //     Serial.printf("0x%02x ", scratch[j]);
@@ -355,7 +396,7 @@ void printClues(GridData data) {
     printer.doubleHeightOff();
     printer.doubleWidthOff();
     for (auto clue : data.across_clues) {
-        printer.printf("%d) %s\n", clue.first, clue.second.c_str());
+        printer.printf("%d) %s\n", clue.num, clue.data.c_str());
     }
     printer.println();
     printer.doubleHeightOn();
@@ -365,12 +406,11 @@ void printClues(GridData data) {
     printer.doubleHeightOff();
     printer.doubleWidthOff();
     for (auto clue : data.down_clues) {
-        printer.printf("%d) %s\n", clue.first, clue.second.c_str());
+        printer.printf("%d) %s\n", clue.num, clue.data.c_str());
     }
     printer.println();
     printer.println();
     printer.println();
-
 }
 
 void setup() {
@@ -381,8 +421,21 @@ void setup() {
 
     delay(10);
     Serial.println('\n');
+    WiFiManager wm;
 
-    WiFi.begin(ssid, password);
+    WiFiManagerParameter print_time(
+        "mynum",
+        "What time would you like to print automatically? Please enter a "
+        "number from 0 - 23 for the hour in EST. Or leave as -1 for no "
+        "automatic printing.",
+        "-1", 10);
+    wm.addParameter(&print_time);
+    
+    if (!wm.autoConnect("Crossbox Setup")) {
+        Serial.println("Failed to connect via WiFiManager");
+        ESP.restart();
+    }
+    // WiFi.begin(ssid, password);
     Serial.print("Connecting to ");
     Serial.print(ssid);
     Serial.println(" ...");
@@ -399,7 +452,7 @@ void setup() {
     configTime(-4 * 60 * 60, 0, "time.google.com");
 
     GridData data = getGridData();
-    // printer.begin();
+    printer.begin();
     // printHeader(data);
     // printGrid(data);
     // printClues(data);
