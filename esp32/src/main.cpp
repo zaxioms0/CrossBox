@@ -35,7 +35,6 @@ struct GridData {
     int height;
     int width;
     std::vector<String> authors;
-    // ((x, y), data)
     std::vector<SquareData> square_data;
     std::vector<ClueData> across_clues;
     std::vector<ClueData> down_clues;
@@ -82,15 +81,16 @@ void getDateString(char *buff, bool pp) {
 }
 
 // returns index of null terminator in buff
-int readStreamUntil(WiFiClient *stream, const char *match, int match_len,
-                    char *buffer, int buffer_len) {
+int readStreamUntil(WiFiClient *stream, const char *match, int match_len, char *buffer,
+                    int buffer_len, bool dump_chars = false) {
     int i = 0;
     int idx = 0;
     while ((stream->connected() || stream->available()) && i < match_len &&
            (!buffer || (idx < buffer_len))) {
         if (stream->available()) {
             char c = stream->read();
-            // Serial.print(c);
+            if (dump_chars)
+                Serial.print(c);
             if (c == match[i]) {
                 i += 1;
             } else {
@@ -115,9 +115,7 @@ GridData getGridData() {
     WiFiClientSecure client;
     HTTPClient http;
     getDateString(date, false);
-    sprintf(url,
-            "https://www.nytimes.com/svc/crosswords/v6/puzzle/mini/%s.json",
-            date);
+    sprintf(url, "https://www.nytimes.com/svc/crosswords/v6/puzzle/mini/%s.json", date);
     Serial.println(url);
 
     http.setFollowRedirects(HTTPC_STRICT_FOLLOW_REDIRECTS);
@@ -137,8 +135,7 @@ GridData getGridData() {
         // try again with tomorrow's date
         configTime((24 - 4) * 60 * 60, 0, "time.google.com");
         getDateString(date, false);
-        sprintf(url,
-                "https://www.nytimes.com/svc/crosswords/v6/puzzle/mini/%s.json",
+        sprintf(url, "https://www.nytimes.com/svc/crosswords/v6/puzzle/mini/%s.json",
                 date);
         Serial.println("Trying again with tomorrow's date");
         Serial.println(url);
@@ -149,8 +146,7 @@ GridData getGridData() {
     }
 
     if (httpResponseCode != 200) {
-        Serial.printf("Failed to get NYT data. HTTP response: %d\n",
-                      httpResponseCode);
+        Serial.printf("Failed to get NYT data. HTTP response: %d\n", httpResponseCode);
         exit(1);
     }
 
@@ -163,8 +159,7 @@ GridData getGridData() {
             const char end_target[4] = "SVG";
 
             readStreamUntil(s, start_target, 8, NULL, 0);
-            int buf_len =
-                readStreamUntil(s, end_target, 3, scratch + 9, scratch_size);
+            int buf_len = readStreamUntil(s, end_target, 3, scratch + 9, scratch_size);
             scratch[9 + buf_len - 5] = '}';
             scratch[9 + buf_len - 4] = 0;
             DeserializationError error = deserializeJson(doc, scratch);
@@ -196,16 +191,14 @@ GridData getGridData() {
         for (int i = 0; i < data.width; i++) {
             int idx = i + data.width * j;
 
-            if (doc["cells"][idx] &&
-                doc["cells"][idx].as<JsonObject>().size() == 0) {
+            if (doc["cells"][idx] && doc["cells"][idx].as<JsonObject>().size() == 0) {
                 SquareData d;
                 d.row = j;
                 d.col = i;
                 d.data = 0;
                 data.square_data.push_back(d);
             } else if (doc["cells"][idx]["label"]) {
-                int label =
-                    atoi(doc["cells"][idx]["label"].as<String>().c_str());
+                int label = atoi(doc["cells"][idx]["label"].as<String>().c_str());
                 SquareData d;
                 d.row = j;
                 d.col = i;
@@ -298,8 +291,8 @@ void writeSquare(int col, int square_dim, int data) {
         for (int j = 0; j < 16; j++) {
             for (int i = 0; i < 16; i++) {
                 if (!read_num_bit(data, i, j)) {
-                    int idx = col * square_dim + (i + offset) +
-                              ((j + offset) * board_px);
+                    int idx =
+                        col * square_dim + (i + offset) + ((j + offset) * board_px);
                     writeScratchBit(idx);
                 }
             }
@@ -312,13 +305,12 @@ void writeSquare(int col, int square_dim, int data) {
     for (int j = 0; j < 16; j++) {
         for (int i = 0; i < 16; i++) {
             if (!read_num_bit(d1, i, j)) {
-                int idx =
-                    col * square_dim + (i + offset) + ((j + offset) * board_px);
+                int idx = col * square_dim + (i + offset) + ((j + offset) * board_px);
                 writeScratchBit(idx);
             }
             if (!read_num_bit(d2, i, j)) {
-                int idx2 = col * square_dim + (i + 8 + offset) +
-                           ((j + offset) * board_px);
+                int idx2 =
+                    col * square_dim + (i + 8 + offset) + ((j + offset) * board_px);
                 writeScratchBit(idx2);
             }
         }
@@ -349,8 +341,7 @@ void printGrid(GridData grid_data, bool dump_bytes = false) {
     for (int i = 0; i < grid_data.height; i++) {
         writeBoardRow(i, grid_data);
         if (dump_bytes) {
-            for (int j = 0; j < (board_px * board_px / grid_data.width / 8);
-                 j++) {
+            for (int j = 0; j < (board_px * board_px / grid_data.width / 8); j++) {
                 Serial.printf("0x%02x ", scratch[j]);
             }
         }
