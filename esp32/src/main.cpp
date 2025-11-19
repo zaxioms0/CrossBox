@@ -32,8 +32,8 @@ struct ClueData {
 };
 
 struct GridData {
-    int height;
-    int width;
+    unsigned char height;
+    unsigned char width;
     std::vector<String> authors;
     std::vector<SquareData> square_data;
     std::vector<ClueData> across_clues;
