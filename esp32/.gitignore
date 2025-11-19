@@ -4,9 +4,3 @@
 .vscode/launch.json
 .vscode/ipch
 .vscode/
-lib/
-test/
-include/
-.vscode/
-src/real_creds.h
-src/creds.h
