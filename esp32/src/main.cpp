@@ -10,17 +10,16 @@
 #include <time.h>
 #include <vector>
 
-// #define DEBUG_ESP_PORT Serial
-// #define HTTPCLIENT_ESP8266_DEBUG
-
 // RX, TX
 // SoftwareSerial printer_serial(14, 16);
+#define ONBOARD_LED 2
+
 Adafruit_Thermal printer(&Serial1);
 int board_px = 384;
-// const int scratch_size = 1 << 13; // 8kb
-const int scratch_size = 1 << 15;
+const int scratch_size = 1 << 13; // 8kb
 
 char scratch[scratch_size] = "{\"cells\":";
+
 struct SquareData {
     unsigned char row;
     unsigned char col;
@@ -42,7 +41,7 @@ struct GridData {
     std::vector<ClueData> down_clues;
 };
 
-void printGridData(GridData d) {
+void printGridDataSerial(GridData d) {
     Serial.printf("Height: %d\n", d.height);
     Serial.printf("Width: %d\n", d.width);
     Serial.print("Author(s): ");
@@ -138,14 +137,11 @@ GridData getGridData() {
         // try again with tomorrow's date
         configTime((24 - 4) * 60 * 60, 0, "time.google.com");
         getDateString(date, false);
-        // configTime(-4 * 60 * 60, 0, "time.google.com");
-        // struct tm timeinfo;
-        // getLocalTime(&timeinfo);
-
         sprintf(url,
                 "https://www.nytimes.com/svc/crosswords/v6/puzzle/mini/%s.json",
                 date);
         Serial.println("Trying again with tomorrow's date");
+        Serial.println(url);
         http.begin(client, url);
         delay(1000);
         httpResponseCode = http.GET();
@@ -252,8 +248,8 @@ GridData getGridData() {
         data.authors.push_back(a);
     }
 
-    printGridData(data);
-    digitalWrite(2, HIGH);
+    printGridDataSerial(data);
+    digitalWrite(ONBOARD_LED, HIGH);
 
     return data;
 }
@@ -414,8 +410,8 @@ void printClues(GridData data) {
 }
 
 void setup() {
-    pinMode(2, OUTPUT);
-    digitalWrite(2, LOW);
+    pinMode(ONBOARD_LED, OUTPUT);
+    digitalWrite(ONBOARD_LED, LOW);
     Serial.begin(115200);
     Serial1.begin(9600);
 
@@ -430,7 +426,7 @@ void setup() {
         "automatic printing.",
         "-1", 10);
     wm.addParameter(&print_time);
-    
+
     if (!wm.autoConnect("Crossbox Setup")) {
         Serial.println("Failed to connect via WiFiManager");
         ESP.restart();
