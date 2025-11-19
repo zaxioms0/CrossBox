@@ -8,5 +8,5 @@ lib/
 test/
 include/
 .vscode/
-src/real_creds.h
-src/creds.h
+real_creds.h
+creds.h
