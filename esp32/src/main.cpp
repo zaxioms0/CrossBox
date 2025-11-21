@@ -7,6 +7,7 @@
 #include <WiFiManager.h>
 #include <creds.h>
 #include <nums.h>
+#include <optional>
 #include <time.h>
 #include <vector>
 
@@ -16,9 +17,10 @@
 
 Adafruit_Thermal printer(&Serial1);
 int board_px = 384;
-const int scratch_size = 1 << 13; // 8kb
+const int scratch_size = 8192; // 8kb
+bool print_today = false;
 
-char scratch[scratch_size] = "{\"cells\":";
+char scratch[scratch_size];
 
 struct SquareData {
     unsigned char row;
@@ -109,9 +111,10 @@ int readStreamUntil(WiFiClient *stream, const char *match, int match_len, char *
     return idx;
 }
 
-GridData getGridData() {
+std::optional<GridData> getGridData() {
     char url[128];
     char date[64];
+    board_px = 384;
     WiFiClientSecure client;
     HTTPClient http;
     getDateString(date, false);
@@ -120,65 +123,58 @@ GridData getGridData() {
 
     http.setFollowRedirects(HTTPC_STRICT_FOLLOW_REDIRECTS);
     // http.addHeader("User-Agent", "Mozilla/5.0");
-    // client.setCACert(root_ca);
+    //  client.setCACert(root_ca);
     client.setInsecure();
     http.begin(client, url);
-
     delay(500);
     int httpResponseCode = http.GET();
+    NetworkClient *s;
+    if (httpResponseCode == 200) {
+        s = http.getStreamPtr();
+    }
     if (httpResponseCode == 403) {
         WiFiClientSecure client;
         HTTPClient http;
         http.setFollowRedirects(HTTPC_STRICT_FOLLOW_REDIRECTS);
-        http.addHeader("User-Agent", "Mozilla/5.0");
         client.setCACert(root_ca);
-        // try again with tomorrow's date
+        http.addHeader("User-Agent", "Mozilla/5.0");
+        //  try again with tomorrow's date
         configTime((24 - 4) * 60 * 60, 0, "time.google.com");
         getDateString(date, false);
-        sprintf(url, "https://www.nytimes.com/svc/crosswords/v6/puzzle/mini/%s.json",
+
+        sprintf(url,
+                "https://www.nytimes.com/svc/crosswords/v6/puzzle/mini/2025-11-%s.json",
                 date);
         Serial.println("Trying again with tomorrow's date");
         Serial.println(url);
+        client.clear();
         http.begin(client, url);
-        delay(1000);
+        delay(500);
         httpResponseCode = http.GET();
-        Serial.printf("New response code: %d\n", httpResponseCode);
+        s = http.getStreamPtr();
     }
 
     if (httpResponseCode != 200) {
         Serial.printf("Failed to get NYT data. HTTP response: %d\n", httpResponseCode);
-        exit(1);
+        return {};
     }
 
-    auto s = http.getStreamPtr();
     JsonDocument doc;
-    bool succeeded = false;
-    {
-        for (int i = 0; i < 3; i++) {
-            const char start_target[9] = "\"cells\":";
-            const char end_target[4] = "SVG";
+    char start_target[16] = "\"cells\":";
+    char end_target[16] = "SVG";
 
-            readStreamUntil(s, start_target, 8, NULL, 0);
-            int buf_len = readStreamUntil(s, end_target, 3, scratch + 9, scratch_size);
-            scratch[9 + buf_len - 5] = '}';
-            scratch[9 + buf_len - 4] = 0;
-            DeserializationError error = deserializeJson(doc, scratch);
-            if (error) {
-                Serial.println("JSON parsing failed: ");
-                Serial.println(error.c_str());
-                Serial.print(scratch);
-                http.GET();
-                s = http.getStreamPtr();
-            } else {
-                succeeded = true;
-                break;
-            }
-        }
+    readStreamUntil(s, start_target, 8, NULL, 0, false);
+    strcpy(scratch, "{\"cells\":");
+    int buf_len = readStreamUntil(s, end_target, 3, scratch + 9, scratch_size, false);
+    scratch[9 + buf_len - 5] = '}';
+    scratch[9 + buf_len - 4] = 0;
+    DeserializationError error = deserializeJson(doc, scratch);
+    if (error) {
+        Serial.println("JSON parsing failed: ");
+        Serial.println(error.c_str());
+        return {};
     }
-    if (!succeeded) {
-        Serial.println("Didn't work. Sorry :(");
-        exit(1);
-    }
+
     // serializeJsonPretty(doc, Serial);
     GridData data;
     data.height = doc["dimensions"]["height"].as<int>();
@@ -221,20 +217,18 @@ GridData getGridData() {
         }
     }
     doc.clear();
-    const char start_target[16] = "\"constructors\":";
-    const char end_target[12] = "\"copyright\"";
+    strcpy(start_target, "\"constructors\":");
+    strcpy(end_target, "\"copyright\"");
     readStreamUntil(s, start_target, 15, NULL, 0);
     strcpy(scratch, "{\"constructors\":");
     int buflen = readStreamUntil(s, end_target, 11, scratch + 16, scratch_size);
     scratch[16 + buflen - 12] = '}';
     scratch[16 + buflen - 11] = 0;
-    Serial.printf("%d, %s\n", buflen, scratch);
-    Serial.flush();
-    DeserializationError error = deserializeJson(doc, scratch);
+    error = deserializeJson(doc, scratch);
     if (error) {
         Serial.println("JSON parsing constructors failed: ");
         Serial.println(error.c_str());
-        exit(1);
+        return {};
     }
     for (auto author : doc["constructors"].as<JsonArray>()) {
         String a = author.as<String>();
@@ -336,8 +330,10 @@ void printGrid(GridData grid_data, bool dump_bytes = false) {
         }
         board_px -= 8;
     }
-    Serial.println(board_px);
-    Serial.println(board_px / grid_data.width);
+    if (dump_bytes) {
+        Serial.printf("x dim: %d\n", board_px);
+        Serial.printf("y dim: %d\n", board_px / grid_data.width);
+    }
     for (int i = 0; i < grid_data.height; i++) {
         writeBoardRow(i, grid_data);
         if (dump_bytes) {
@@ -438,13 +434,33 @@ void setup() {
 
     Serial.println('\n');
     Serial.println("Connection established!");
-    configTime(-4 * 60 * 60, 0, "time.google.com");
+    configTime(-4 * 60 * 60, 0, "time.google.com", "pool.ntp.org");
 
-    GridData data = getGridData();
-    printer.begin();
+    // printer.begin();
     // printHeader(data);
-    printGrid(data);
+    // printGrid(data);
     // printClues(data);
 }
 
-void loop() {}
+void loop() {
+    // struct tm timeinfo;
+    // if (!getLocalTime(&timeinfo))
+    //     return;
+    // int hour = timeinfo.tm_hour;
+    // int minute = timeinfo.tm_min;
+
+    // if (hour == 6 && !print_today) {
+    //     print_today = true;
+    // } else if (hour == 0 && minute == 1) {
+    //     print_today = false;
+    // }
+
+    // delay(50);
+    std::optional<GridData> data_opt = getGridData();
+    while (!data_opt) {
+        data_opt = getGridData();
+    }
+    GridData data = data_opt.value();
+
+    Serial.println(esp_get_free_heap_size());
+}
