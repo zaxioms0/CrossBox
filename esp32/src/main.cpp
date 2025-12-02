@@ -11,16 +11,21 @@
 #include <time.h>
 #include <vector>
 
-// RX, TX
-// SoftwareSerial printer_serial(14, 16);
+#define RX 0
+#define TX 0
+#define BUTT 18
+#define BUTT_LED 8
 #define ONBOARD_LED 2
 
 Adafruit_Thermal printer(&Serial1);
 int board_px = 384;
 const int scratch_size = 8192; // 8kb
 bool print_today = false;
-
+bool portalRunning = false;
 char scratch[scratch_size];
+long press_time = 0;
+int ctr = 0;
+bool pressed = false;
 
 struct SquareData {
     unsigned char row;
@@ -74,6 +79,17 @@ void getDateString(char *buff, bool pp) {
         Serial.println("Failed to obtain time");
         exit(1);
     }
+    if (pp)
+        sprintf(buff, "%d/%d/%d", 1 + timeinfo.tm_mon, timeinfo.tm_mday,
+                1900 + timeinfo.tm_year);
+    else
+        sprintf(buff, "%d-%d-%d", 1900 + timeinfo.tm_year, 1 + timeinfo.tm_mon,
+                timeinfo.tm_mday);
+}
+
+void getDateStringEpoch(char *buff, time_t epoch, bool pp) {
+    struct tm timeinfo;
+    localtime_r(&epoch, &timeinfo);
     if (pp)
         sprintf(buff, "%d/%d/%d", 1 + timeinfo.tm_mon, timeinfo.tm_mday,
                 1900 + timeinfo.tm_year);
@@ -139,8 +155,8 @@ std::optional<GridData> getGridData() {
         client.setCACert(root_ca);
         http.addHeader("User-Agent", "Mozilla/5.0");
         //  try again with tomorrow's date
-        configTime((24 - 4) * 60 * 60, 0, "time.google.com");
-        getDateString(date, false);
+        // configTime((24 - 4) * 60 * 60, 0, "time.google.com");
+        getDateStringEpoch(date, time(NULL) + 84600, false);
 
         sprintf(url,
                 "https://www.nytimes.com/svc/crosswords/v6/puzzle/mini/2025-11-%s.json",
@@ -400,12 +416,55 @@ void printClues(GridData data) {
 
 void setup() {
     pinMode(ONBOARD_LED, OUTPUT);
+    pinMode(BUTT_LED, OUTPUT);
+    pinMode(BUTT, INPUT_PULLUP);
     digitalWrite(ONBOARD_LED, LOW);
+    digitalWrite(BUTT_LED, HIGH);
+
     Serial.begin(115200);
-    Serial1.begin(9600);
+    Serial1.begin(9600, SERIAL_8N1, RX, TX);
 
     delay(10);
     Serial.println('\n');
+    // WiFiManager wm;
+
+    // WiFiManagerParameter print_time(
+    //     "mynum",
+    //     "What time would you like to print automatically? Please enter a "
+    //     "number from 0 - 23 for the hour in EST. Or leave as -1 for no "
+    //     "automatic printing.",
+    //     "-1", 10);
+    // wm.addParameter(&print_time);
+
+    // if (!wm.autoConnect("Crossbox Setup")) {
+    //     Serial.println("Failed to connect via WiFiManager");
+    //     ESP.restart();
+    // }
+    // Serial.print("Connecting to ");
+    // Serial.print(ssid);
+    // Serial.println(" ...");
+
+    // int i = 0;
+    // while (WiFi.status() != WL_CONNECTED) { // Wait for the Wi-Fi to connect
+    //     delay(1000);
+    //     Serial.print(++i);
+    //     Serial.print(' ');
+    // }
+
+    // Serial.println('\n');
+    // Serial.println("Connection established!");
+    // configTime(-4 * 60 * 60, 0, "time.google.com", "pool.ntp.org");
+
+    printer.begin();
+}
+
+void printCrossword(GridData data) {
+    printHeader(data);
+    printGrid(data);
+    printClues(data);
+}
+
+void WifiSetup() {
     WiFiManager wm;
 
     WiFiManagerParameter print_time(
@@ -415,52 +474,75 @@ void setup() {
         "automatic printing.",
         "-1", 10);
     wm.addParameter(&print_time);
+    wm.setConfigPortalBlocking(false);
+    wm.startConfigPortal("CrossBox Setup");
 
-    if (!wm.autoConnect("Crossbox Setup")) {
-        Serial.println("Failed to connect via WiFiManager");
-        ESP.restart();
+    long flash_time = millis();
+    bool led_state = true;
+    digitalWrite(BUTT_LED, led_state);
+    while (wm.getConfigPortalActive()) {
+        wm.process();
+        if (millis() - flash_time > 1000) {
+            led_state = !led_state;
+            digitalWrite(BUTT_LED, led_state);
+            flash_time = millis();
+        }
     }
-    // WiFi.begin(ssid, password);
-    Serial.print("Connecting to ");
-    Serial.print(ssid);
-    Serial.println(" ...");
-
-    int i = 0;
-    while (WiFi.status() != WL_CONNECTED) { // Wait for the Wi-Fi to connect
-        delay(1000);
-        Serial.print(++i);
-        Serial.print(' ');
-    }
-
-    Serial.println('\n');
-    Serial.println("Connection established!");
+    WiFi.begin();
     configTime(-4 * 60 * 60, 0, "time.google.com", "pool.ntp.org");
-
-    // printer.begin();
-    // printHeader(data);
-    // printGrid(data);
-    // printClues(data);
+    Serial.println("Done with Wifi");
+    digitalWrite(BUTT_LED, LOW);
 }
 
 void loop() {
     // struct tm timeinfo;
-    // if (!getLocalTime(&timeinfo))
-    //     return;
-    // int hour = timeinfo.tm_hour;
-    // int minute = timeinfo.tm_min;
+    // if (getLocalTime(&timeinfo)) {
+    //     int hour = timeinfo.tm_hour;
+    //     int minute = timeinfo.tm_min;
 
-    // if (hour == 6 && !print_today) {
-    //     print_today = true;
-    // } else if (hour == 0 && minute == 1) {
-    //     print_today = false;
+    //     if (hour == 6 && !print_today) {
+    //         print_today = true;
+    //     } else if (hour == 0 && minute == 1) {
+    //         print_today = false;
+    //     }
     // }
 
-    // delay(50);
-    std::optional<GridData> data_opt = getGridData();
-    while (!data_opt) {
-        data_opt = getGridData();
-    }
-    GridData data = data_opt.value();
+    int cur_button = digitalRead(BUTT);
 
-    Serial.println(esp_get_free_heap_size());
+    if (cur_button == LOW && !pressed) {
+        press_time = millis();
+        pressed = true;
+    }
+
+    if (pressed && cur_button == HIGH) {
+        delay(20);
+        if (digitalRead(BUTT) != HIGH)
+            return;
+
+        if (!WiFi.isConnected()) {
+            Serial.println("tried to print no wifi");
+            WiFi.disconnect();
+            WiFi.begin();
+        } else {
+            Serial.println("trying printer");
+
+            std::optional<GridData> data_opt = getGridData();
+            while (!data_opt) {
+                data_opt = getGridData();
+            }
+            GridData data = data_opt.value();
+
+            Serial.println(esp_get_free_heap_size());
+            // printCrossword(data);
+        }
+        Serial.println(ctr);
+        ctr++;
+        pressed = false;
+        delay(100);
+    }
+
+    if (pressed && millis() - press_time > 5000) {
+        WifiSetup();
+        pressed = false;
+    }
 }
