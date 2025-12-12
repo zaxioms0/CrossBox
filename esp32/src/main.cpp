@@ -11,14 +11,17 @@
 #include <time.h>
 #include <vector>
 
-#define RX 0
-#define TX 0
-#define BUTT 18
-#define BUTT_LED 8
+#define RX 25          // YELLOW
+#define TX 26          // WHITE
+#define BUTT 19        // FRONT WIRE
+#define BUTT_LED_OUT 5 // RIGHT WIRE
+#define BUTT_LED 18    // LEFT WIRE
 #define ONBOARD_LED 2
 
 Adafruit_Thermal printer(&Serial1);
+WiFiManager wm;
 int board_px = 384;
+const int max_board = 384;
 const int scratch_size = 8192; // 8kb
 bool print_today = false;
 bool portalRunning = false;
@@ -41,11 +44,19 @@ struct ClueData {
 struct GridData {
     unsigned char height;
     unsigned char width;
+    time_t puzz_epoch;
     std::vector<String> authors;
     std::vector<SquareData> square_data;
     std::vector<ClueData> across_clues;
     std::vector<ClueData> down_clues;
 };
+
+WiFiManagerParameter
+    print_time("mynum",
+               "What time would you like to print automatically? Please enter a "
+               "number from 0 - 23 for the hour in EST. Or leave as -1 for no "
+               "automatic printing.",
+               "-1", 10);
 
 void printGridDataSerial(GridData d) {
     Serial.printf("Height: %d\n", d.height);
@@ -83,7 +94,7 @@ void getDateString(char *buff, bool pp) {
         sprintf(buff, "%d/%d/%d", 1 + timeinfo.tm_mon, timeinfo.tm_mday,
                 1900 + timeinfo.tm_year);
     else
-        sprintf(buff, "%d-%d-%d", 1900 + timeinfo.tm_year, 1 + timeinfo.tm_mon,
+        sprintf(buff, "%d-%02d-%02d", 1900 + timeinfo.tm_year, 1 + timeinfo.tm_mon,
                 timeinfo.tm_mday);
 }
 
@@ -94,7 +105,7 @@ void getDateStringEpoch(char *buff, time_t epoch, bool pp) {
         sprintf(buff, "%d/%d/%d", 1 + timeinfo.tm_mon, timeinfo.tm_mday,
                 1900 + timeinfo.tm_year);
     else
-        sprintf(buff, "%d-%d-%d", 1900 + timeinfo.tm_year, 1 + timeinfo.tm_mon,
+        sprintf(buff, "%d-%02d-%02d", 1900 + timeinfo.tm_year, 1 + timeinfo.tm_mon,
                 timeinfo.tm_mday);
 }
 
@@ -129,10 +140,11 @@ int readStreamUntil(WiFiClient *stream, const char *match, int match_len, char *
 
 std::optional<GridData> getGridData() {
     char url[128];
-    char date[64];
+    char date[32];
     board_px = 384;
     WiFiClientSecure client;
     HTTPClient http;
+    time_t puzz_epoch = time(NULL);
     getDateString(date, false);
     sprintf(url, "https://www.nytimes.com/svc/crosswords/v6/puzzle/mini/%s.json", date);
     Serial.println(url);
@@ -152,14 +164,12 @@ std::optional<GridData> getGridData() {
         WiFiClientSecure client;
         HTTPClient http;
         http.setFollowRedirects(HTTPC_STRICT_FOLLOW_REDIRECTS);
-        client.setCACert(root_ca);
-        http.addHeader("User-Agent", "Mozilla/5.0");
-        //  try again with tomorrow's date
-        // configTime((24 - 4) * 60 * 60, 0, "time.google.com");
+        client.setInsecure();
+        // try again with tomorrow's date
         getDateStringEpoch(date, time(NULL) + 84600, false);
+        puzz_epoch = time(NULL) + 84600;
 
-        sprintf(url,
-                "https://www.nytimes.com/svc/crosswords/v6/puzzle/mini/2025-11-%s.json",
+        sprintf(url, "https://www.nytimes.com/svc/crosswords/v6/puzzle/mini/%s.json",
                 date);
         Serial.println("Trying again with tomorrow's date");
         Serial.println(url);
@@ -171,7 +181,8 @@ std::optional<GridData> getGridData() {
     }
 
     if (httpResponseCode != 200) {
-        Serial.printf("Failed to get NYT data. HTTP response: %d\n", httpResponseCode);
+        char msg[64];
+        sprintf(msg, "Failed to get NYT data. HTTP response: %d\n", httpResponseCode);
         return {};
     }
 
@@ -188,13 +199,14 @@ std::optional<GridData> getGridData() {
     if (error) {
         Serial.println("JSON parsing failed: ");
         Serial.println(error.c_str());
+
         return {};
     }
 
-    // serializeJsonPretty(doc, Serial);
     GridData data;
     data.height = doc["dimensions"]["height"].as<int>();
     data.width = doc["dimensions"]["width"].as<int>();
+    data.puzz_epoch = puzz_epoch;
     data.square_data = {};
     data.authors = {};
     data.across_clues = {};
@@ -202,7 +214,6 @@ std::optional<GridData> getGridData() {
     for (int j = 0; j < data.height; j++) {
         for (int i = 0; i < data.width; i++) {
             int idx = i + data.width * j;
-
             if (doc["cells"][idx] && doc["cells"][idx].as<JsonObject>().size() == 0) {
                 SquareData d;
                 d.row = j;
@@ -252,35 +263,42 @@ std::optional<GridData> getGridData() {
     }
 
     printGridDataSerial(data);
-    digitalWrite(ONBOARD_LED, HIGH);
-
+    // digitalWrite(ONBOARD_LED, HIGH);
     return data;
 }
 
-void writeScratchBit(int i) {
-    int b = i / 8;
-    int offset = 7 - (i % 8);
+void writeScratchBit(int idx) {
+    int b = idx / 8;
+    int offset = 7 - (idx % 8);
     scratch[b] |= ((char)1) << offset;
+}
+
+// write to "logical" position in bitmap
+// e.g. assuming an n x n bitmap is truly
+// n x n, not worrying about row allignment
+void writeScratchBitLogical(int i) {
+    int idx = i + (max_board - board_px) * (i / board_px); // byte align in bitmap
+    writeScratchBit(idx);
 }
 
 void writeOutline(int square_dim, int width) {
     for (int x = 0; x < width; x++) {
         for (int i = 0; i < square_dim; i++) {
             // top
-            writeScratchBit(x * square_dim + i);
-            writeScratchBit(x * square_dim + board_px + i);
+            writeScratchBitLogical(x * square_dim + i);
+            writeScratchBitLogical(x * square_dim + board_px + i);
             // left
-            writeScratchBit(x * square_dim + (board_px * i));
-            writeScratchBit(x * (square_dim) + (board_px * i) + 1);
+            writeScratchBitLogical(x * square_dim + (board_px * i));
+            writeScratchBitLogical(x * square_dim + (board_px * i) + 1);
             // bottom
-            writeScratchBit(x * square_dim + (board_px * (square_dim - 2)) + i);
-            writeScratchBit(x * square_dim + (board_px * (square_dim - 1)) + i);
+            writeScratchBitLogical(x * square_dim + (board_px * (square_dim - 2)) + i);
+            writeScratchBitLogical(x * square_dim + (board_px * (square_dim - 1)) + i);
         }
     }
     // right
     for (int i = 0; i < square_dim; i++) {
-        writeScratchBit(i * board_px + (board_px - 1));
-        writeScratchBit(i * board_px + (board_px - 2));
+        writeScratchBitLogical(i * board_px + (board_px - 1));
+        writeScratchBitLogical(i * board_px + (board_px - 2));
     }
 }
 
@@ -290,7 +308,7 @@ void writeSquare(int col, int square_dim, int data) {
         for (int i = 0; i < square_dim; i++) {
             for (int j = 0; j < square_dim; j++) {
                 int idx = (col * square_dim) + i + (board_px * j);
-                writeScratchBit(idx);
+                writeScratchBitLogical(idx);
             }
         }
         return;
@@ -303,7 +321,7 @@ void writeSquare(int col, int square_dim, int data) {
                 if (!read_num_bit(data, i, j)) {
                     int idx =
                         col * square_dim + (i + offset) + ((j + offset) * board_px);
-                    writeScratchBit(idx);
+                    writeScratchBitLogical(idx);
                 }
             }
         }
@@ -316,12 +334,12 @@ void writeSquare(int col, int square_dim, int data) {
         for (int i = 0; i < 16; i++) {
             if (!read_num_bit(d1, i, j)) {
                 int idx = col * square_dim + (i + offset) + ((j + offset) * board_px);
-                writeScratchBit(idx);
+                writeScratchBitLogical(idx);
             }
             if (!read_num_bit(d2, i, j)) {
                 int idx2 =
                     col * square_dim + (i + 8 + offset) + ((j + offset) * board_px);
-                writeScratchBit(idx2);
+                writeScratchBitLogical(idx2);
             }
         }
     }
@@ -338,13 +356,16 @@ void writeBoardRow(int row, GridData grid_data) {
     }
 }
 
+void printDebug(char *debug_msg) { printer.println(debug_msg); }
+
 void printGrid(GridData grid_data, bool dump_bytes = false) {
-    int tmp = board_px;
-    for (int i = 0; i < tmp / 8; i++) {
+    printer.justify('C');
+    board_px = 384;
+    for (int i = 0; i < max_board; i++) {
         if (board_px % grid_data.width == 0) {
             break;
         }
-        board_px -= 8;
+        board_px -= 1;
     }
     if (dump_bytes) {
         Serial.printf("x dim: %d\n", board_px);
@@ -360,6 +381,7 @@ void printGrid(GridData grid_data, bool dump_bytes = false) {
         printer.printBitmap(board_px, board_px / grid_data.width,
                             (unsigned char *)scratch, true);
     }
+    printer.justify('L');
 }
 
 void printHeader(GridData data) {
@@ -371,8 +393,8 @@ void printHeader(GridData data) {
     printer.boldOff();
     printer.doubleHeightOff();
     printer.doubleWidthOff();
-    char date[64];
-    getDateString(date, true);
+    char date[32];
+    getDateStringEpoch(date, data.puzz_epoch, true);
     printer.println(date);
     if (data.authors.size() == 1) {
         printer.print("Author: ");
@@ -384,7 +406,6 @@ void printHeader(GridData data) {
         if (i < data.authors.size() - 1)
             Serial.print(", ");
     }
-    printer.println();
 }
 
 void printClues(GridData data) {
@@ -400,6 +421,7 @@ void printClues(GridData data) {
         printer.printf("%d) %s\n", clue.num, clue.data.c_str());
     }
     printer.println();
+    printer.boldOn();
     printer.doubleHeightOn();
     printer.doubleWidthOn();
     printer.println("Down:");
@@ -409,71 +431,27 @@ void printClues(GridData data) {
     for (auto clue : data.down_clues) {
         printer.printf("%d) %s\n", clue.num, clue.data.c_str());
     }
-    printer.println();
-    printer.println();
-    printer.println();
 }
-
-void setup() {
-    pinMode(ONBOARD_LED, OUTPUT);
-    pinMode(BUTT_LED, OUTPUT);
-    pinMode(BUTT, INPUT_PULLUP);
-    digitalWrite(ONBOARD_LED, LOW);
-    digitalWrite(BUTT_LED, HIGH);
-
-    Serial.begin(115200);
-    Serial1.begin(9600, SERIAL_8N1, RX, TX);
-
-    delay(10);
-    Serial.println('\n');
-    // WiFiManager wm;
-
-    // WiFiManagerParameter print_time(
-    //     "mynum",
-    //     "What time would you like to print automatically? Please enter a "
-    //     "number from 0 - 23 for the hour in EST. Or leave as -1 for no "
-    //     "automatic printing.",
-    //     "-1", 10);
-    // wm.addParameter(&print_time);
-
-    // if (!wm.autoConnect("Crossbox Setup")) {
-    //     Serial.println("Failed to connect via WiFiManager");
-    //     ESP.restart();
-    // }
-    // Serial.print("Connecting to ");
-    // Serial.print(ssid);
-    // Serial.println(" ...");
-
-    // int i = 0;
-    // while (WiFi.status() != WL_CONNECTED) { // Wait for the Wi-Fi to connect
-    //     delay(1000);
-    //     Serial.print(++i);
-    //     Serial.print(' ');
-    // }
-
-    // Serial.println('\n');
-    // Serial.println("Connection established!");
-    // configTime(-4 * 60 * 60, 0, "time.google.com", "pool.ntp.org");
-
-    printer.begin();
-}
-
 void printCrossword(GridData data) {
     printHeader(data);
+    printer.println();
     printGrid(data);
     printClues(data);
+    printer.println();
+    printer.println();
+    printer.println();
+}
+
+void getAndPrintCrossword() {
+    std::optional<GridData> data_opt = getGridData();
+    while (!data_opt) {
+        data_opt = getGridData();
+    }
+    GridData data = data_opt.value();
+    printCrossword(data);
 }
 
 void WifiSetup() {
-    WiFiManager wm;
-
-    WiFiManagerParameter print_time(
-        "mynum",
-        "What time would you like to print automatically? Please enter a "
-        "number from 0 - 23 for the hour in EST. Or leave as -1 for no "
-        "automatic printing.",
-        "-1", 10);
-    wm.addParameter(&print_time);
     wm.setConfigPortalBlocking(false);
     wm.startConfigPortal("CrossBox Setup");
 
@@ -489,60 +467,98 @@ void WifiSetup() {
         }
     }
     WiFi.begin();
-    configTime(-4 * 60 * 60, 0, "time.google.com", "pool.ntp.org");
     Serial.println("Done with Wifi");
     digitalWrite(BUTT_LED, LOW);
 }
 
-void loop() {
-    // struct tm timeinfo;
-    // if (getLocalTime(&timeinfo)) {
-    //     int hour = timeinfo.tm_hour;
-    //     int minute = timeinfo.tm_min;
+void setup() {
+    pinMode(ONBOARD_LED, OUTPUT);
+    pinMode(BUTT_LED, OUTPUT);
+    pinMode(BUTT_LED_OUT, OUTPUT);
+    digitalWrite(BUTT_LED_OUT, LOW);
 
-    //     if (hour == 6 && !print_today) {
-    //         print_today = true;
-    //     } else if (hour == 0 && minute == 1) {
-    //         print_today = false;
-    //     }
+    pinMode(BUTT, INPUT_PULLUP);
+    digitalWrite(ONBOARD_LED, LOW);
+
+    Serial.begin(115200);
+    Serial1.begin(9600, SERIAL_8N1, RX, TX);
+
+    delay(10);
+
+    wm.addParameter(&print_time);
+    wm.setEnableConfigPortal(false);
+    if (!wm.autoConnect("Crossbox Setup")) {
+        wm.setEnableConfigPortal(true);
+        WifiSetup();
+    }
+    wm.setEnableConfigPortal(true);
+    digitalWrite(BUTT_LED, HIGH);
+    // Serial.print("Connecting to ");
+    // Serial.print(ssid);
+    // Serial.println(" ...");
+
+    // int i = 0;
+    // while (WiFi.status() != WL_CONNECTED) { // Wait for the Wi-Fi to connect
+    //     delay(1000);
+    //     Serial.print(++i);
+    //     Serial.print(' ');
     // }
+
+    Serial.println('\n');
+    Serial.println("Connection established!");
+    configTime(-4 * 60 * 60, 0, "time.google.com", "pool.ntp.org");
+    printer.begin();
+}
+
+void loop() {
+    struct tm timeinfo;
+    if (WiFi.isConnected() && getLocalTime(&timeinfo)) {
+        int hour = timeinfo.tm_hour;
+        int minute = timeinfo.tm_min;
+
+        if (hour == atoi(print_time.getValue()) && !print_today) {
+            print_today = true;
+            getAndPrintCrossword();
+        } else if (hour == 0 && minute == 1) {
+            print_today = false;
+        }
+    }
 
     int cur_button = digitalRead(BUTT);
 
+    // press
     if (cur_button == LOW && !pressed) {
         press_time = millis();
         pressed = true;
     }
 
+    // unpress
     if (pressed && cur_button == HIGH) {
         delay(20);
         if (digitalRead(BUTT) != HIGH)
             return;
 
         if (!WiFi.isConnected()) {
-            Serial.println("tried to print no wifi");
+            char msg[128];
+            sprintf(msg,
+                    "Tried to print, but was not connected to WiFi network: %s. "
+                    "Attempting to reconnect...",
+                    WiFi.SSID());
+            printDebug(msg);
             WiFi.disconnect();
             WiFi.begin();
         } else {
             Serial.println("trying printer");
-
-            std::optional<GridData> data_opt = getGridData();
-            while (!data_opt) {
-                data_opt = getGridData();
-            }
-            GridData data = data_opt.value();
-
-            Serial.println(esp_get_free_heap_size());
-            // printCrossword(data);
+            getAndPrintCrossword();
         }
-        Serial.println(ctr);
-        ctr++;
         pressed = false;
         delay(100);
     }
 
+    // hold
     if (pressed && millis() - press_time > 5000) {
         WifiSetup();
+        digitalWrite(BUTT_LED, HIGH);
         pressed = false;
     }
 }
