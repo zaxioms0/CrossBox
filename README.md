@@ -5,4 +5,4 @@ Thanks for visiting! [People on Reddit](https://www.reddit.com/r/crossword/comme
 else wants to make it. This currently *does* work without an NYT Games subscription. Hopefully it stays that way :] 
 
 The original version of this project was done on an esp8266 and information about it can be found in the `esp8266` directory.
-I am currently working on a version using the esp32.
+The current version is in the `esp32` directory and all development going forward will be for it.
