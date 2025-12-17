@@ -1,3 +1,6 @@
+#include "globals.h"
+#include "util.h"
+#include "wifi_setup.h"
 #include <Adafruit_Thermal.h>
 #include <Arduino.h>
 #include <ArduinoJson.h>
@@ -9,9 +12,6 @@
 #include <nums.h>
 #include <optional>
 #include <time.h>
-#include "wifi_setup.h"
-#include "globals.h"
-#include "util.h"
 #include <vector>
 
 struct SquareData {
@@ -76,7 +76,6 @@ std::optional<GridData> getGridData() {
     http.begin(client, url);
     delay(500);
     int httpResponseCode = http.GET();
-    NetworkClient *s;
     if (httpResponseCode == 403) {
         http.end();
         // try again with tomorrow's date
@@ -92,10 +91,12 @@ std::optional<GridData> getGridData() {
         delay(500);
         httpResponseCode = http.GET();
     }
+    NetworkClient *s;
 
     if (httpResponseCode != 200) {
         char msg[64];
         sprintf(msg, "Failed to get NYT data. HTTP response: %d\n", httpResponseCode);
+        Serial.println(msg);
         return {};
     } else {
         s = http.getStreamPtr();
@@ -113,7 +114,6 @@ std::optional<GridData> getGridData() {
     if (error) {
         Serial.println("JSON parsing failed: ");
         Serial.println(error.c_str());
-
         return {};
     }
 
@@ -177,7 +177,6 @@ std::optional<GridData> getGridData() {
     }
 
     printGridDataSerial(data);
-    // digitalWrite(ONBOARD_LED, HIGH);
     return data;
 }
 
@@ -360,7 +359,8 @@ void getAndPrintCrossword() {
     }
 
     if (!data_opt) {
-        char msg[] = "Failed to get crossword after 3 attempts sorry :(";
+        char msg[] = "Failed to get crossword after 3 attempts sorry :( You should "
+                     "take a look at Serial for debugging info";
         printDebug(msg);
     } else {
         GridData data = data_opt.value();

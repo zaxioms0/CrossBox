@@ -11,6 +11,7 @@ unsigned long press_time = 0;
 int ctr = 0;
 bool pressed = false;
 int print_hr = -1;
+
 Adafruit_Thermal printer(&Serial1);
 
 WiFiManager wm;
