@@ -20,11 +20,9 @@ void WifiSetup() {
     }
     prefs.begin("config", false);
     Serial.printf("got print time: %s\n", print_time_param.getValue());
-    prefs.putString("print_time", print_time_param.getValue());
-    char pt[10];
-    prefs.getString("print_time", pt, 10);
-    Serial.printf("Checking if there: %s\n", pt);
-    print_hr = atoi(pt);
+    int h = atoi(print_time_param.getValue());
+    prefs.putInt("print_time", h);
+    print_hr = h;
     prefs.end();
     WiFi.begin();
     Serial.println("Done with Wifi");

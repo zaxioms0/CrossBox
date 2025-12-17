@@ -33,11 +33,9 @@ void setup() {
     setenv("TZ", "EST5EDT,M3.2.0/2,M11.1.0/2", 1);
     tzset();
     prefs.begin("config", false);
-    char pt[10];
-    prefs.getString("print_time", pt, 10);
+    print_hr = prefs.getInt("print_time", -1);
+    Serial.printf("Setup to print at %d\n", print_hr);
     prefs.end();
-    Serial.printf("Setup to print at: %s\n", pt);
-    print_hr = atoi(pt);
     printer.begin();
 }
 
@@ -46,6 +44,7 @@ void loop() {
     if (WiFi.isConnected() && getLocalTime(&timeinfo)) {
         int hour = timeinfo.tm_hour;
         int minute = timeinfo.tm_min;
+        Serial.printf("Trying to print at %d\n", print_hr);
         if (hour == print_hr && !print_today) {
             print_today = true;
             getAndPrintCrossword();
