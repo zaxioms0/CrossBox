@@ -62,20 +62,13 @@ void printDebug(char *debug_msg) { printer.println(debug_msg); }
 
 void threadBlink(void *count) {
     int cnt = (int)count;
-    if (cnt == -1) {
-        while (true) {
-            digitalWrite(BUTT_LED, HIGH);
-            vTaskDelay(200);
-            digitalWrite(BUTT_LED, LOW);
-            vTaskDelay(200);
-        }
-    } else {
-        for (int i = 0; i < cnt; i++) {
-            digitalWrite(BUTT_LED, HIGH);
-            vTaskDelay(200);
-            digitalWrite(BUTT_LED, LOW);
-            vTaskDelay(200);
-        }
-        vTaskDelete(NULL);
+    int i = 0;
+    while (cnt == -1 || i < cnt) {
+        digitalWrite(BUTT_LED, HIGH);
+        vTaskDelay(200);
+        digitalWrite(BUTT_LED, LOW);
+        vTaskDelay(200);
+        i += 1;
     }
+    vTaskDelete(NULL);
 }

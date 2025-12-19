@@ -1,8 +1,8 @@
 #include "WiFiManager.h"
-#include <WiFi.h>
-#include <Arduino.h>
 #include <Adafruit_Thermal.h>
+#include <Arduino.h>
 #include <Preferences.h>
+#include <WiFi.h>
 
 #pragma once
 #define RX 25          // YELLOW
@@ -11,7 +11,6 @@
 #define BUTT_LED_OUT 5 // RIGHT WIRE
 #define BUTT_LED 18    // LEFT WIRE
 #define ONBOARD_LED 2
-
 
 extern WiFiManager wm;
 extern WiFiManagerParameter print_time_param;

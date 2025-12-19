@@ -25,7 +25,7 @@ void setup() {
         WifiSetup();
     }
     wm.setEnableConfigPortal(true);
-    xTaskCreate(threadBlink, "blink", 1024, (void*)3, 1, NULL);
+    xTaskCreate(threadBlink, "blink", 1024, (void *)3, 1, NULL);
     Serial.println('\n');
     Serial.println("Connection established!");
     configTime(0, 0, "time.google.com", "pool.ntp.org");
@@ -81,7 +81,7 @@ void loop() {
             WiFi.begin();
         } else {
             TaskHandle_t handle;
-            xTaskCreate(threadBlink, "blink", 1024, (void*)-1, 1, &handle);
+            xTaskCreate(threadBlink, "blink", 1024, (void *)-1, 1, &handle);
             getAndPrintCrossword();
             vTaskDelete(handle);
             digitalWrite(BUTT_LED, LOW);
