@@ -1,8 +1,8 @@
-#include <time.h>
-#include <stdio.h>
-#include <Arduino.h>
 #include "globals.h"
+#include <Arduino.h>
 #include <WiFiClient.h>
+#include <stdio.h>
+#include <time.h>
 
 void getDateString(char *buff, bool pp) {
     struct tm timeinfo;
@@ -59,3 +59,23 @@ int readStreamUntil(WiFiClient *stream, const char *match, int match_len, char *
 }
 
 void printDebug(char *debug_msg) { printer.println(debug_msg); }
+
+void threadBlink(void *count) {
+    int cnt = (int)count;
+    if (cnt == -1) {
+        while (true) {
+            digitalWrite(BUTT_LED, HIGH);
+            vTaskDelay(200);
+            digitalWrite(BUTT_LED, LOW);
+            vTaskDelay(200);
+        }
+    } else {
+        for (int i = 0; i < cnt; i++) {
+            digitalWrite(BUTT_LED, HIGH);
+            vTaskDelay(200);
+            digitalWrite(BUTT_LED, LOW);
+            vTaskDelay(200);
+        }
+        vTaskDelete(NULL);
+    }
+}

@@ -25,5 +25,5 @@ extern bool print_today;
 extern int print_hr;
 extern char scratch[];
 extern unsigned long press_time;
-extern int ctr;
+extern unsigned int ctr;
 extern bool pressed;

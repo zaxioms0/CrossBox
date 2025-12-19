@@ -29,6 +29,7 @@ struct GridData {
     unsigned char height;
     unsigned char width;
     time_t puzz_epoch;
+    // not "constructors" because that means something else
     std::vector<String> authors;
     std::vector<SquareData> square_data;
     std::vector<ClueData> across_clues;
@@ -38,7 +39,7 @@ struct GridData {
 void printGridDataSerial(GridData d) {
     Serial.printf("Height: %d\n", d.height);
     Serial.printf("Width: %d\n", d.width);
-    Serial.print("Author(s): ");
+    Serial.print("Constructors(s): ");
     for (size_t i = 0; i < d.authors.size(); i++) {
         Serial.print(d.authors[i].c_str());
         if (i < d.authors.size() - 1)
@@ -112,7 +113,7 @@ std::optional<GridData> getGridData() {
     scratch[9 + buf_len - 4] = 0;
     DeserializationError error = deserializeJson(doc, scratch);
     if (error) {
-        Serial.println("JSON parsing failed: ");
+        Serial.println("JSON parsing clues failed: ");
         Serial.println(error.c_str());
         return {};
     }
@@ -305,9 +306,9 @@ void printHeader(GridData data) {
     getDateStringEpoch(date, data.puzz_epoch, true);
     printer.println(date);
     if (data.authors.size() == 1) {
-        printer.print("Author: ");
+        printer.print("Constructor: ");
     } else {
-        printer.print("Authors: ");
+        printer.print("Constructors: ");
     }
     for (size_t i = 0; i < data.authors.size(); i++) {
         printer.print(data.authors[i].c_str());
@@ -341,6 +342,7 @@ void printClues(GridData data) {
     }
 }
 void printCrossword(GridData data) {
+    printer.reset();
     printHeader(data);
     printer.println();
     printGrid(data);
@@ -348,6 +350,7 @@ void printCrossword(GridData data) {
     printer.println();
     printer.println();
     printer.println();
+    printer.reset();
 }
 
 void getAndPrintCrossword() {

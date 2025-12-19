@@ -1,9 +1,9 @@
-#include <Arduino.h>
-#include <WiFi.h>
-#include "wifi_setup.h"
+#include "board.h"
 #include "globals.h"
 #include "util.h"
-#include "board.h"
+#include "wifi_setup.h"
+#include <Arduino.h>
+#include <WiFi.h>
 
 void setup() {
     pinMode(ONBOARD_LED, OUTPUT);
@@ -25,8 +25,7 @@ void setup() {
         WifiSetup();
     }
     wm.setEnableConfigPortal(true);
-    digitalWrite(BUTT_LED, HIGH);
-
+    xTaskCreate(threadBlink, "blink", 1024, (void*)3, 1, NULL);
     Serial.println('\n');
     Serial.println("Connection established!");
     configTime(0, 0, "time.google.com", "pool.ntp.org");
@@ -40,18 +39,21 @@ void setup() {
 }
 
 void loop() {
-    struct tm timeinfo;
-    if (WiFi.isConnected() && getLocalTime(&timeinfo)) {
-        int hour = timeinfo.tm_hour;
-        int minute = timeinfo.tm_min;
-        Serial.printf("Trying to print at %d\n", print_hr);
-        if (hour == print_hr && !print_today) {
-            print_today = true;
-            getAndPrintCrossword();
-        } else if (hour == 0 && minute == 1) {
-            print_today = false;
-        }
-    }
+    // struct tm timeinfo;
+    // ctr += 1;
+    // if (WiFi.isConnected() && getLocalTime(&timeinfo)) {
+    //     int hour = timeinfo.tm_hour;
+    //     int minute = timeinfo.tm_min;
+    //     if (ctr % 20 == 0)
+    //         Serial.printf("%d:%d\n", hour, minute);
+    //     // Serial.printf("Trying to print at %d\n", print_hr);
+    //     if (hour == print_hr && !print_today) {
+    //         print_today = true;
+    //         getAndPrintCrossword();
+    //     } else if (hour == 0 && minute == 1) {
+    //         print_today = false;
+    //     }
+    // }
 
     int cur_button = digitalRead(BUTT);
 
@@ -68,7 +70,7 @@ void loop() {
             return;
 
         if (!WiFi.isConnected()) {
-            char msg[128];
+            char msg[256];
             sprintf(msg,
                     "Tried to print, but was not connected to WiFi network: %s and "
                     "password: %s "
@@ -78,15 +80,19 @@ void loop() {
             WiFi.disconnect();
             WiFi.begin();
         } else {
+            TaskHandle_t handle;
+            xTaskCreate(threadBlink, "blink", 1024, (void*)-1, 1, &handle);
             getAndPrintCrossword();
+            vTaskDelete(handle);
+            digitalWrite(BUTT_LED, LOW);
         }
         pressed = false;
+        Serial.println(esp_get_free_heap_size());
     }
 
     // hold
     if (pressed && millis() - press_time > 5000) {
         WifiSetup();
-        digitalWrite(BUTT_LED, HIGH);
         pressed = false;
     }
 }

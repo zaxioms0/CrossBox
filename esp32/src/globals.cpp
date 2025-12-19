@@ -8,7 +8,7 @@ int board_px = MAX_BOARD;
 bool print_today = false;
 char scratch[SCRATCH_SIZE];
 unsigned long press_time = 0;
-int ctr = 0;
+unsigned int ctr = 0;
 bool pressed = false;
 int print_hr = -1;
 
