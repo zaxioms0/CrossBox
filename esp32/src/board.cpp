@@ -1,4 +1,3 @@
-#include "creds.h"
 #include "globals.h"
 #include "util.h"
 #include "wifi_setup.h"
