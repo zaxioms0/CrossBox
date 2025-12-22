@@ -9,9 +9,9 @@ void setup() {
     pinMode(ONBOARD_LED, OUTPUT);
     pinMode(BUTT_LED, OUTPUT);
     pinMode(BUTT_LED_OUT, OUTPUT);
-    digitalWrite(BUTT_LED_OUT, LOW);
-
     pinMode(BUTT, INPUT_PULLUP);
+
+    digitalWrite(BUTT_LED_OUT, LOW);
     digitalWrite(ONBOARD_LED, LOW);
 
     Serial.begin(115200);
@@ -25,35 +25,38 @@ void setup() {
         WifiSetup();
     }
     wm.setEnableConfigPortal(true);
-    xTaskCreate(threadBlink, "blink", 1024, (void *)3, 1, NULL);
     Serial.println('\n');
     Serial.println("Connection established!");
     configTime(0, 0, "time.google.com", "pool.ntp.org");
     setenv("TZ", "EST5EDT,M3.2.0/2,M11.1.0/2", 1);
     tzset();
+    
+    delay(500);
+    struct tm timeinfo;
+    if (!getLocalTime(&timeinfo)) {
+        Serial.println("SETUP FAILED");
+        ESP.restart();
+    }
     prefs.begin("config", false);
     print_hr = prefs.getInt("print_time", -1);
     Serial.printf("Setup to print at %d\n", print_hr);
     prefs.end();
     printer.begin();
+    xTaskCreate(threadBlink, "blink", 1024, (void *)3, 1, NULL);
 }
 
 void loop() {
-    // struct tm timeinfo;
-    // ctr += 1;
-    // if (WiFi.isConnected() && getLocalTime(&timeinfo)) {
-    //     int hour = timeinfo.tm_hour;
-    //     int minute = timeinfo.tm_min;
-    //     if (ctr % 20 == 0)
-    //         Serial.printf("%d:%d\n", hour, minute);
-    //     // Serial.printf("Trying to print at %d\n", print_hr);
-    //     if (hour == print_hr && !print_today) {
-    //         print_today = true;
-    //         getAndPrintCrossword();
-    //     } else if (hour == 0 && minute == 1) {
-    //         print_today = false;
-    //     }
-    // }
+    struct tm timeinfo;
+    if (WiFi.isConnected() && getLocalTime(&timeinfo)) {
+        int hour = timeinfo.tm_hour;
+        int minute = timeinfo.tm_min;
+        if (hour == print_hr && !print_today) {
+            print_today = true;
+            getAndPrintCrossword();
+        } else if (hour == 0 && minute == 1) {
+            print_today = false;
+        }
+    }
 
     int cur_button = digitalRead(BUTT);
 
@@ -80,6 +83,7 @@ void loop() {
             WiFi.disconnect();
             WiFi.begin();
         } else {
+            Serial.println("Printing Start");
             TaskHandle_t handle;
             xTaskCreate(threadBlink, "blink", 1024, (void *)-1, 1, &handle);
             getAndPrintCrossword();

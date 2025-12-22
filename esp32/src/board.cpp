@@ -1,3 +1,4 @@
+#include "creds.h"
 #include "globals.h"
 #include "util.h"
 #include "wifi_setup.h"
@@ -9,34 +10,73 @@
 #include <WiFi.h>
 #include <WiFiClientSecure.h>
 #include <WiFiManager.h>
-#include <nums.h>
 #include <optional>
 #include <time.h>
 #include <vector>
 
-struct SquareData {
-    unsigned char row;
-    unsigned char col;
-    unsigned char data;
+struct Square {
+    unsigned int row;
+    unsigned int col;
+    unsigned int data; // 0 means filled in
 };
 
-struct ClueData {
-    unsigned char num;
+struct Clue {
+    unsigned int num;
     String data;
 };
 
-struct GridData {
-    unsigned char height;
-    unsigned char width;
+struct Grid {
+    unsigned int height;
+    unsigned int width;
     time_t puzz_epoch;
     // not "constructors" because that means something else
     std::vector<String> authors;
-    std::vector<SquareData> square_data;
-    std::vector<ClueData> across_clues;
-    std::vector<ClueData> down_clues;
+    std::vector<Square> square_data;
+    std::vector<Clue> across_clues;
+    std::vector<Clue> down_clues;
 };
 
-void printGridDataSerial(GridData d) {
+const unsigned char nums[10][32] = {
+    {0xff, 0xff, 0xfc, 0x7f, 0xf9, 0x3f, 0xf3, 0x9f, 0xf7, 0x9f, 0xf7,
+     0xdf, 0xf7, 0xdf, 0xf7, 0xdf, 0xf7, 0xdf, 0xf7, 0x9f, 0xf3, 0x9f,
+     0xf9, 0x3f, 0xfc, 0x7f, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff},
+    {0xff, 0xff, 0xff, 0x7f, 0xfe, 0x7f, 0xfc, 0x7f, 0xfb, 0x7f, 0xff,
+     0x7f, 0xff, 0x7f, 0xff, 0x7f, 0xff, 0x7f, 0xff, 0x7f, 0xff, 0x7f,
+     0xff, 0x7f, 0xff, 0x7f, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff},
+    {0xff, 0xff, 0xfc, 0x7f, 0xf3, 0x3f, 0xf7, 0x9f, 0xf7, 0xdf, 0xff,
+     0x9f, 0xff, 0xbf, 0xff, 0x3f, 0xfe, 0x7f, 0xf9, 0xff, 0xfb, 0xff,
+     0xf3, 0xff, 0xf0, 0x1f, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff},
+    {0xff, 0xff, 0xfc, 0x7f, 0xf3, 0x3f, 0xf7, 0x9f, 0xff, 0x9f, 0xff,
+     0x3f, 0xfe, 0x3f, 0xff, 0x9f, 0xff, 0x9f, 0xff, 0xdf, 0xf7, 0x9f,
+     0xf3, 0x3f, 0xf8, 0x7f, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff},
+    {0xff, 0xff, 0xff, 0x3f, 0xfe, 0x3f, 0xfe, 0x3f, 0xfd, 0x3f, 0xf9,
+     0x3f, 0xfb, 0x3f, 0xf3, 0x3f, 0xe7, 0x3f, 0xe0, 0x1f, 0xff, 0x3f,
+     0xff, 0x3f, 0xff, 0x3f, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff},
+    {0xff, 0xff, 0xf8, 0x1f, 0xfb, 0xff, 0xfb, 0xff, 0xf3, 0xff, 0xf0,
+     0x3f, 0xf3, 0x1f, 0xff, 0x9f, 0xff, 0xdf, 0xff, 0xdf, 0xf7, 0x9f,
+     0xf3, 0x3f, 0xf8, 0x7f, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff},
+    {0xff, 0xff, 0xfc, 0x7f, 0xf9, 0xbf, 0xf3, 0x9f, 0xf7, 0xff, 0xf4,
+     0x3f, 0xf1, 0x3f, 0xf3, 0x9f, 0xf7, 0xdf, 0xf7, 0xdf, 0xf3, 0x9f,
+     0xf9, 0x3f, 0xfc, 0x7f, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff},
+    {0xff, 0xff, 0xf0, 0x1f, 0xff, 0x9f, 0xff, 0xbf, 0xff, 0x3f, 0xfe,
+     0x7f, 0xfe, 0x7f, 0xfe, 0xff, 0xfc, 0xff, 0xfd, 0xff, 0xfd, 0xff,
+     0xfd, 0xff, 0xf9, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff},
+    {0xff, 0xff, 0xfc, 0x7f, 0xf9, 0x3f, 0xf3, 0x9f, 0xf3, 0x9f, 0xfb,
+     0xbf, 0xf8, 0x3f, 0xf3, 0x3f, 0xf7, 0x9f, 0xf7, 0xdf, 0xf7, 0x9f,
+     0xf3, 0x1f, 0xf8, 0x7f, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff},
+    {0xff, 0xff, 0xf8, 0x7f, 0xf3, 0x3f, 0xf7, 0x9f, 0xf7, 0xdf, 0xf7,
+     0x9f, 0xf3, 0x9f, 0xf8, 0x5f, 0xff, 0xdf, 0xff, 0x9f, 0xf7, 0x9f,
+     0xf3, 0x3f, 0xf8, 0x7f, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff},
+};
+
+bool read_num_bit(int num, int i, int j) {
+    int idx = 16 * j + i;
+    int b = idx / 8;
+    char offset = 1 << (7 - (idx % 8));
+    return (nums[num][b] & offset) ? 1 : 0;
+}
+
+void printGridDataSerial(Grid d) {
     Serial.printf("Height: %d\n", d.height);
     Serial.printf("Width: %d\n", d.width);
     Serial.print("Constructors(s): ");
@@ -62,7 +102,7 @@ void printGridDataSerial(GridData d) {
     }
 }
 
-std::optional<GridData> getGridData() {
+std::optional<Grid> getGridData() {
     char url[128];
     char date[32];
     WiFiClientSecure client;
@@ -118,7 +158,7 @@ std::optional<GridData> getGridData() {
         return {};
     }
 
-    GridData data;
+    Grid data;
     data.height = doc["dimensions"]["height"].as<int>();
     data.width = doc["dimensions"]["width"].as<int>();
     data.puzz_epoch = puzz_epoch;
@@ -130,14 +170,14 @@ std::optional<GridData> getGridData() {
         for (int i = 0; i < data.width; i++) {
             int idx = i + data.width * j;
             if (doc["cells"][idx] && doc["cells"][idx].as<JsonObject>().size() == 0) {
-                SquareData d;
+                Square d;
                 d.row = j;
                 d.col = i;
                 d.data = 0;
                 data.square_data.push_back(d);
             } else if (doc["cells"][idx]["label"]) {
                 int label = atoi(doc["cells"][idx]["label"].as<String>().c_str());
-                SquareData d;
+                Square d;
                 d.row = j;
                 d.col = i;
                 d.data = label;
@@ -149,7 +189,7 @@ std::optional<GridData> getGridData() {
         String direction = clue["direction"].as<String>();
         int label = atoi(clue["label"].as<String>().c_str());
         String text = clue["text"][0]["plain"].as<String>();
-        ClueData c;
+        Clue c;
         c.num = label;
         c.data = text;
         if (strcmp(direction.c_str(), "Across") == 0) {
@@ -207,8 +247,8 @@ void writeOutline(int square_dim, int width) {
             writeScratchBitLogical(x * square_dim + (board_px * i));
             writeScratchBitLogical(x * square_dim + (board_px * i) + 1);
             // bottom
-            writeScratchBitLogical(x * square_dim + (board_px * (square_dim - 2)) + i);
             writeScratchBitLogical(x * square_dim + (board_px * (square_dim - 1)) + i);
+            writeScratchBitLogical(x * square_dim + (board_px * (square_dim - 2)) + i);
         }
     }
     // right
@@ -261,7 +301,7 @@ void writeSquare(int col, int square_dim, int data) {
     }
 }
 
-void writeBoardRow(int row, GridData grid_data) {
+void writeBoardRow(int row, Grid grid_data) {
     int square_dim = board_px / grid_data.width;
     memset(scratch, 0, SCRATCH_SIZE);
     writeOutline(square_dim, grid_data.width);
@@ -272,7 +312,7 @@ void writeBoardRow(int row, GridData grid_data) {
     }
 }
 
-void printGrid(GridData grid_data, bool dump_bytes = false) {
+void printGrid(Grid grid_data, bool dump_bytes = false) {
     board_px = MAX_BOARD;
     while (board_px % grid_data.width != 0) {
         board_px -= 1;
@@ -293,7 +333,7 @@ void printGrid(GridData grid_data, bool dump_bytes = false) {
     }
 }
 
-void printHeader(GridData data) {
+void printHeader(Grid data) {
     printer.justify('C');
     printer.boldOn();
     printer.doubleHeightOn();
@@ -317,7 +357,7 @@ void printHeader(GridData data) {
     }
 }
 
-void printClues(GridData data) {
+void printClues(Grid data) {
     printer.justify('L');
     printer.boldOn();
     printer.doubleHeightOn();
@@ -341,7 +381,8 @@ void printClues(GridData data) {
         printer.printf("%d) %s\n", clue.num, clue.data.c_str());
     }
 }
-void printCrossword(GridData data) {
+void printCrossword(Grid data) {
+    printer.wake();
     printer.reset();
     printHeader(data);
     printer.println();
@@ -354,11 +395,13 @@ void printCrossword(GridData data) {
 }
 
 void getAndPrintCrossword() {
-    std::optional<GridData> data_opt = std::nullopt;
+    std::optional<Grid> data_opt = std::nullopt;
     for (int i = 0; i < 3; i++) {
         data_opt = getGridData();
         if (data_opt)
             break;
+        else
+            Serial.printf("Print failed: %i\n");
     }
 
     if (!data_opt) {
@@ -366,7 +409,7 @@ void getAndPrintCrossword() {
                      "take a look at Serial for debugging info";
         printDebug(msg);
     } else {
-        GridData data = data_opt.value();
+        Grid data = data_opt.value();
         printCrossword(data);
     }
 }
