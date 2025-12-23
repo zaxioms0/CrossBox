@@ -58,7 +58,12 @@ int readStreamUntil(WiFiClient *stream, const char *match, int match_len, char *
     return idx;
 }
 
-void printDebug(char *debug_msg) { printer.println(debug_msg); }
+void printDebug(char *debug_msg) {
+    printer.wake();
+    printer.reset();
+    printer.println(debug_msg);
+    printer.reset();
+}
 
 void threadBlink(void *count) {
     int cnt = (int)count;
