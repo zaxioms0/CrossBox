@@ -400,7 +400,7 @@ void getAndPrintCrossword() {
         if (data_opt)
             break;
         else
-            Serial.printf("Print failed: %i\n");
+            Serial.printf("Print failed: %d\n", i);
     }
 
     if (!data_opt) {
@@ -408,7 +408,9 @@ void getAndPrintCrossword() {
                      "take a look at Serial for debugging info";
         printDebug(msg);
     } else {
+        digitalWrite(ONBOARD_LED, HIGH);
         Grid data = data_opt.value();
         printCrossword(data);
+        digitalWrite(ONBOARD_LED, LOW);
     }
 }

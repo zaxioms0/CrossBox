@@ -30,7 +30,7 @@ void setup() {
     configTime(0, 0, "time.google.com", "pool.ntp.org");
     setenv("TZ", "EST5EDT,M3.2.0/2,M11.1.0/2", 1);
     tzset();
-    
+
     delay(500);
     struct tm timeinfo;
     if (!getLocalTime(&timeinfo)) {
@@ -52,7 +52,11 @@ void loop() {
         int minute = timeinfo.tm_min;
         if (hour == print_hr && !print_today) {
             print_today = true;
+            TaskHandle_t handle;
+            xTaskCreate(threadBlink, "blink", 1024, (void *)-1, 1, &handle);
             getAndPrintCrossword();
+            vTaskDelete(handle);
+            digitalWrite(BUTT_LED, LOW);
         } else if (hour == 0 && minute == 1) {
             print_today = false;
         }
@@ -72,7 +76,7 @@ void loop() {
         if (digitalRead(BUTT) != HIGH)
             return;
 
-        if (!WiFi.isConnected()) {
+        if (!WiFi.isConnected() || !getLocalTime(&timeinfo)) {
             char msg[256];
             sprintf(msg,
                     "Tried to print, but was not connected to WiFi network: %s and "
