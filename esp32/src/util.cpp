@@ -62,6 +62,8 @@ void printDebug(char *debug_msg) {
     printer.wake();
     printer.reset();
     printer.println(debug_msg);
+    printer.println();
+    printer.println();
     printer.reset();
 }
 

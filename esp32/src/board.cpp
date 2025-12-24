@@ -114,42 +114,53 @@ std::optional<Grid> getGridData() {
     http.setFollowRedirects(HTTPC_STRICT_FOLLOW_REDIRECTS);
     client.setInsecure();
     http.begin(client, url);
+    char nyts_cookie[512]; 
+    sprintf(nyts_cookie, "NYT-S=%s", nyts);
+    Serial.println(nyts_cookie);
+    http.addHeader("Cookie", nyts_cookie);
     delay(500);
     int httpResponseCode = http.GET();
     if (httpResponseCode == 403) {
-        http.end();
-        // try again with tomorrow's date
-        getDateStringEpoch(date, time(NULL) + 84600, false);
-        puzz_epoch = time(NULL) + 84600;
+        // http.end();
+        // // try again with tomorrow's date
+        // getDateStringEpoch(date, time(NULL) + 84600, false);
+        // puzz_epoch = time(NULL) + 84600;
 
-        sprintf(url, "https://www.nytimes.com/svc/crosswords/v6/puzzle/mini/%s.json",
-                date);
-        Serial.println("Trying again with tomorrow's date");
-        Serial.println(url);
-        client.clear();
-        http.begin(client, url);
-        delay(500);
-        httpResponseCode = http.GET();
-    }
-    NetworkClient *s;
-
-    if (httpResponseCode != 200) {
+        // sprintf(url, "https://www.nytimes.com/svc/crosswords/v6/puzzle/mini/%s.json",
+        //         date);
+        // Serial.println("Trying again with tomorrow's date");
+        // Serial.println(url);
+        // client.clear();
+        // http.begin(client, url);
+        // delay(500);
+        // httpResponseCode = http.GET();
+        char msg[64];
+        sprintf(msg, "Failed to get NYT data. HTTP response: %d\n", httpResponseCode);
+        Serial.println(msg);
+        strcpy(msg, "HTTP got 403. Check your NYT-S token.");
+        printDebug(msg);
+        return {};
+    } else if (httpResponseCode != 200) {
         char msg[64];
         sprintf(msg, "Failed to get NYT data. HTTP response: %d\n", httpResponseCode);
         Serial.println(msg);
         return {};
-    } else {
-        s = http.getStreamPtr();
     }
+    NetworkClient *s;
+    s = http.getStreamPtr();
+
     JsonDocument doc;
     char start_target[16] = "\"cells\":";
     char end_target[16] = "SVG";
 
+    Serial.println("Getting JSON");
     readStreamUntil(s, start_target, 8, NULL, 0, false);
     strcpy(scratch, "{\"cells\":");
     int buf_len = readStreamUntil(s, end_target, 3, scratch + 9, SCRATCH_SIZE, false);
     scratch[9 + buf_len - 5] = '}';
     scratch[9 + buf_len - 4] = 0;
+    Serial.println("Parsing JSON");
+
     DeserializationError error = deserializeJson(doc, scratch);
     if (error) {
         Serial.println("JSON parsing clues failed: ");
@@ -197,9 +208,12 @@ std::optional<Grid> getGridData() {
             data.down_clues.push_back(c);
         }
     }
+    Serial.println("Parsed first bit");
+
     doc.clear();
     strcpy(start_target, "\"constructors\":");
     strcpy(end_target, "\"copyright\"");
+    Serial.println("Getting second JSON");
     readStreamUntil(s, start_target, 15, NULL, 0);
     strcpy(scratch, "{\"constructors\":");
     int buflen = readStreamUntil(s, end_target, 11, scratch + 16, SCRATCH_SIZE);

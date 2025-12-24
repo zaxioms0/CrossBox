@@ -14,6 +14,8 @@
 
 extern WiFiManager wm;
 extern WiFiManagerParameter print_time_param;
+extern WiFiManagerParameter nyts_param;
+
 extern Preferences prefs;
 extern Adafruit_Thermal printer;
 
@@ -22,6 +24,7 @@ extern const int SCRATCH_SIZE;
 extern int board_px;
 extern bool print_today;
 extern int print_hr;
+extern char nyts[];
 extern char scratch[];
 extern unsigned long press_time;
 extern unsigned int ctr;

@@ -18,6 +18,7 @@ void setup() {
     Serial1.begin(9600, SERIAL_8N1, RX, TX);
     delay(10);
 
+    wm.addParameter(&nyts_param);
     wm.addParameter(&print_time_param);
     wm.setEnableConfigPortal(false);
     if (!wm.autoConnect()) {
@@ -39,6 +40,7 @@ void setup() {
     }
     prefs.begin("config", false);
     print_hr = prefs.getInt("print_time", -1);
+    strcpy(nyts, prefs.getString("nyts", "").c_str());
     Serial.printf("Setup to print at %d\n", print_hr);
     prefs.end();
     printer.begin();
@@ -72,6 +74,7 @@ void loop() {
 
     // unpress
     if (pressed && cur_button == HIGH) {
+    // if (true) {
         delay(20);
         if (digitalRead(BUTT) != HIGH)
             return;
@@ -86,7 +89,11 @@ void loop() {
             printDebug(msg);
             WiFi.disconnect();
             WiFi.begin();
-        } else {
+        } else if (strlen(nyts) == 0) {
+            char msg[32] = "NYT-S Cookie not set";
+            printDebug(msg);
+        }
+        else {
             Serial.println("Printing Start");
             TaskHandle_t handle;
             xTaskCreate(threadBlink, "blink", 1024, (void *)-1, 1, &handle);

@@ -11,6 +11,7 @@ unsigned long press_time = 0;
 unsigned int ctr = 0;
 bool pressed = false;
 int print_hr = -1;
+char nyts[256] = "";
 
 Adafruit_Thermal printer(&Serial1);
 
@@ -21,5 +22,7 @@ WiFiManagerParameter
                      "number from 0 - 23 for the hour in EST. Or leave as -1 for no "
                      "automatic printing.",
                      "-1", 10);
+WiFiManagerParameter nyts_param("nyts", "Please Provide your NYT-S Cookie", "NYT-S",
+                                256);
 
 Preferences prefs;
