@@ -26,39 +26,66 @@ void setup() {
         WifiSetup();
     }
     wm.setEnableConfigPortal(true);
+    delay(500);
     Serial.println('\n');
     Serial.println("Connection established!");
     configTime(0, 0, "time.google.com", "pool.ntp.org");
     setenv("TZ", "EST5EDT,M3.2.0/2,M11.1.0/2", 1);
     tzset();
 
-    delay(500);
-    struct tm timeinfo;
-    if (!getLocalTime(&timeinfo)) {
-        Serial.println("SETUP FAILED");
-        ESP.restart();
-    }
     prefs.begin("config", false);
     print_hr = prefs.getInt("print_time", -1);
     strcpy(nyts, prefs.getString("nyts", "").c_str());
+    strcpy(ssid, prefs.getString("ssid", "").c_str());
+    strcpy(wifi_pass, prefs.getString("wifi_pass", "").c_str());
     Serial.printf("Setup to print at %d\n", print_hr);
     prefs.end();
+
     printer.begin();
+    WiFi.setSleep(false);
+    if (!ensureInternet()) {
+        char msg[256];
+        sprintf(msg,
+                "Was not connected to WiFi network: %s and "
+                "password: %s at end of startup sequence. Restarting.",
+                ssid, wifi_pass);
+        printDebug(msg);
+        ESP.restart();
+    }
+    struct tm timeinfo;
+    if (!getLocalTime(&timeinfo)) {
+        Serial.println("SETUP FAILED");
+        char msg[128] =
+            "Could not retrieve time at end of startup sequence despite being "
+            "connected to WiFi. Restarting.";
+        printDebug(msg);
+        ESP.restart();
+    }
+    Serial.println("Setup Complete");
     xTaskCreate(threadBlink, "blink", 1024, (void *)3, 1, NULL);
 }
 
 void loop() {
     struct tm timeinfo;
-    if (WiFi.isConnected() && getLocalTime(&timeinfo)) {
+    if (getLocalTime(&timeinfo)) {
         int hour = timeinfo.tm_hour;
         int minute = timeinfo.tm_min;
         if (hour == print_hr && !print_today) {
+            if (!ensureInternet()) {
+                char msg[128];
+                sprintf(msg,
+                        "Tried to print at %d:%02d, but failed to connect to the "
+                        "internet.\n",
+                        hour, minute);
+                printDebug(msg);
+            } else {
+                TaskHandle_t handle;
+                xTaskCreate(threadBlink, "blink", 1024, (void *)-1, 1, &handle);
+                getAndPrintCrossword();
+                vTaskDelete(handle);
+                digitalWrite(BUTT_LED, LOW);
+            }
             print_today = true;
-            TaskHandle_t handle;
-            xTaskCreate(threadBlink, "blink", 1024, (void *)-1, 1, &handle);
-            getAndPrintCrossword();
-            vTaskDelete(handle);
-            digitalWrite(BUTT_LED, LOW);
         } else if (hour == 0 && minute == 1) {
             print_today = false;
         }
@@ -74,26 +101,21 @@ void loop() {
 
     // unpress
     if (pressed && cur_button == HIGH) {
-    // if (true) {
         delay(20);
         if (digitalRead(BUTT) != HIGH)
             return;
 
-        if (!WiFi.isConnected() || !getLocalTime(&timeinfo)) {
+        if (!ensureInternet() || !getLocalTime(&timeinfo)) {
             char msg[256];
             sprintf(msg,
                     "Tried to print, but was not connected to WiFi network: %s and "
-                    "password: %s "
-                    "Attempting to reconnect...",
-                    WiFi.SSID(), WiFi.psk());
+                    "password: %s. Please try again.",
+                    ssid, wifi_pass);
             printDebug(msg);
-            WiFi.disconnect();
-            WiFi.begin();
-        } else if (strlen(nyts) == 0) {
+        } else if (strlen(nyts) <= 5) { // "" or "NYT-S"
             char msg[32] = "NYT-S Cookie not set";
             printDebug(msg);
-        }
-        else {
+        } else {
             Serial.println("Printing Start");
             TaskHandle_t handle;
             xTaskCreate(threadBlink, "blink", 1024, (void *)-1, 1, &handle);

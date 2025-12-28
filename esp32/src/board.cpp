@@ -107,14 +107,16 @@ std::optional<Grid> getGridData() {
     WiFiClientSecure client;
     HTTPClient http;
     time_t puzz_epoch = time(NULL);
-    getDateString(date, false);
+    if (!getDateString(date, false)) {
+        return {};
+    }
     sprintf(url, "https://www.nytimes.com/svc/crosswords/v6/puzzle/mini/%s.json", date);
     Serial.println(url);
 
     http.setFollowRedirects(HTTPC_STRICT_FOLLOW_REDIRECTS);
     client.setInsecure();
     http.begin(client, url);
-    char nyts_cookie[512]; 
+    char nyts_cookie[512];
     sprintf(nyts_cookie, "NYT-S=%s", nyts);
     Serial.println(nyts_cookie);
     http.addHeader("Cookie", nyts_cookie);
@@ -250,24 +252,27 @@ void writeScratchBitLogical(int i) {
     writeScratchBit(idx);
 }
 
-void writeOutline(int square_dim, int width) {
+void writeOutline(int square_dim, int width, bool close) {
     for (int x = 0; x < width; x++) {
         for (int i = 0; i < square_dim; i++) {
             // top
             writeScratchBitLogical(x * square_dim + i);
-            writeScratchBitLogical(x * square_dim + board_px + i);
-            // left
+            // writeScratchBitLogical(x * square_dim + board_px + i);
+            //  left
             writeScratchBitLogical(x * square_dim + (board_px * i));
-            writeScratchBitLogical(x * square_dim + (board_px * i) + 1);
-            // bottom
-            writeScratchBitLogical(x * square_dim + (board_px * (square_dim - 1)) + i);
-            writeScratchBitLogical(x * square_dim + (board_px * (square_dim - 2)) + i);
+            // writeScratchBitLogical(x * square_dim + (board_px * i) + 1);
+            //  bottom
+            if (close)
+                writeScratchBitLogical(x * square_dim + (board_px * (square_dim - 1)) +
+                                       i);
+            // writeScratchBitLogical(x * square_dim + (board_px * (square_dim - 2)) +
+            // i);
         }
     }
     // right
     for (int i = 0; i < square_dim; i++) {
         writeScratchBitLogical(i * board_px + (board_px - 1));
-        writeScratchBitLogical(i * board_px + (board_px - 2));
+        // writeScratchBitLogical(i * board_px + (board_px - 2));
     }
 }
 
@@ -314,10 +319,10 @@ void writeSquare(int col, int square_dim, int data) {
     }
 }
 
-void writeBoardRow(int row, Grid grid_data) {
+void writeBoardRow(int row, Grid grid_data, bool bottom) {
     int square_dim = board_px / grid_data.width;
     memset(scratch, 0, SCRATCH_SIZE);
-    writeOutline(square_dim, grid_data.width);
+    writeOutline(square_dim, grid_data.width, bottom);
     for (auto p : grid_data.square_data) {
         if (p.row == row) {
             writeSquare(p.col, square_dim, p.data);
@@ -335,7 +340,7 @@ void printGrid(Grid grid_data, bool dump_bytes = false) {
         Serial.printf("y dim: %d\n", (board_px / grid_data.width) * grid_data.height);
     }
     for (int i = 0; i < grid_data.height; i++) {
-        writeBoardRow(i, grid_data);
+        writeBoardRow(i, grid_data, i == grid_data.height - 1);
         if (dump_bytes) {
             for (int j = 0; j < (board_px * board_px / grid_data.width / 8); j++) {
                 Serial.printf("0x%02x ", scratch[j]);
@@ -351,7 +356,7 @@ void printHeader(Grid data) {
     printer.boldOn();
     printer.doubleHeightOn();
     printer.doubleWidthOn();
-    printer.println(F("NYT MINI"));
+    printer.println("NYT MINI");
     printer.boldOff();
     printer.doubleHeightOff();
     printer.doubleWidthOff();
@@ -366,7 +371,7 @@ void printHeader(Grid data) {
     for (size_t i = 0; i < data.authors.size(); i++) {
         printer.print(data.authors[i].c_str());
         if (i < data.authors.size() - 1)
-            Serial.print(", ");
+            printer.print(", ");
     }
 }
 
@@ -379,8 +384,17 @@ void printClues(Grid data) {
     printer.boldOff();
     printer.doubleHeightOff();
     printer.doubleWidthOff();
+    unsigned int max_across = 0;
     for (auto clue : data.across_clues) {
-        printer.printf("%d) %s\n", clue.num, clue.data.c_str());
+        max_across = max(max_across, clue.num);
+    }
+    for (auto clue : data.across_clues) {
+        char msg[512];
+        if (max_across >= 10)
+            sprintf(msg, "%2d) %s", clue.num, clue.data.c_str());
+        else
+            sprintf(msg, "%d) %s", clue.num, clue.data.c_str());
+        printAlign(msg, 3 + (int)(max_across >= 10));
     }
     printer.println();
     printer.boldOn();
@@ -390,10 +404,20 @@ void printClues(Grid data) {
     printer.boldOff();
     printer.doubleHeightOff();
     printer.doubleWidthOff();
+    unsigned int max_down = 0;
     for (auto clue : data.down_clues) {
-        printer.printf("%d) %s\n", clue.num, clue.data.c_str());
+        max_down = max(max_down, clue.num);
+    }
+    for (auto clue : data.down_clues) {
+        char msg[512];
+        if (max_down >= 10)
+            sprintf(msg, "%2d) %s", clue.num, clue.data.c_str());
+        else
+            sprintf(msg, "%d) %s", clue.num, clue.data.c_str());
+        printAlign(msg, 3 + (int)(max_down >= 10));
     }
 }
+
 void printCrossword(Grid data) {
     printer.wake();
     printer.reset();
@@ -418,8 +442,8 @@ void getAndPrintCrossword() {
     }
 
     if (!data_opt) {
-        char msg[] = "Failed to get crossword after 3 attempts sorry :( You should "
-                     "take a look at Serial for debugging info";
+        char msg[128] = "Failed to get crossword after 3 attempts sorry :( You should "
+                        "take a look at Serial for debugging info";
         printDebug(msg);
     } else {
         digitalWrite(ONBOARD_LED, HIGH);

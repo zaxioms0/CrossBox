@@ -1,8 +1,8 @@
-#include "WiFiManager.h"
 #include <Adafruit_Thermal.h>
 #include <Arduino.h>
 #include <Preferences.h>
 #include <WiFi.h>
+#include <WiFiManager.h>
 
 #pragma once
 #define RX 25          // YELLOW
@@ -21,6 +21,7 @@ extern Adafruit_Thermal printer;
 
 extern const int MAX_BOARD;
 extern const int SCRATCH_SIZE;
+extern const int TEXT_WIDTH;
 extern int board_px;
 extern bool print_today;
 extern int print_hr;
@@ -29,3 +30,5 @@ extern char scratch[];
 extern unsigned long press_time;
 extern unsigned int ctr;
 extern bool pressed;
+extern char ssid[];
+extern char wifi_pass[];
