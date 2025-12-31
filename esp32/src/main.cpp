@@ -1,5 +1,6 @@
-#include "board.h"
 #include "globals.h"
+#include "nyt.h"
+#include "puzzmo.h"
 #include "util.h"
 #include "wifi_setup.h"
 #include <Arduino.h>
@@ -16,10 +17,13 @@ void setup() {
 
     Serial.begin(115200);
     Serial1.begin(9600, SERIAL_8N1, RX, TX);
+    printer.begin();
+
     delay(10);
 
     wm.addParameter(&nyts_param);
     wm.addParameter(&print_time_param);
+    wm.addParameter(&crosstype_param);
     wm.setEnableConfigPortal(false);
     if (!wm.autoConnect()) {
         wm.setEnableConfigPortal(true);
@@ -35,13 +39,13 @@ void setup() {
 
     prefs.begin("config", false);
     print_hr = prefs.getInt("print_time", -1);
+    primary_cross = (CrossType)prefs.getInt("cross_type", NYT);
     strcpy(nyts, prefs.getString("nyts", "").c_str());
     strcpy(ssid, prefs.getString("ssid", "").c_str());
     strcpy(wifi_pass, prefs.getString("wifi_pass", "").c_str());
     Serial.printf("Setup to print at %d\n", print_hr);
     prefs.end();
 
-    printer.begin();
     WiFi.setSleep(false);
     if (!ensureInternet()) {
         char msg[256];
@@ -65,6 +69,28 @@ void setup() {
     xTaskCreate(threadBlink, "blink", 1024, (void *)3, 1, NULL);
 }
 
+void printPrimaryCrossword() {
+    switch (primary_cross) {
+    case NYT: {
+        if (strlen(nyts) <= 5) { // "" or "NYT-S"
+            char msg[32] = "NYT-S Cookie not set";
+            printDebug(msg);
+            break;
+        }
+        getAndPrintNYTCrossword();
+        break;
+    }
+    case Puzzmo: {
+        getAndPrintPuzzmoCrossword();
+        break;
+    }
+    default: {
+        char msg[64] = "Primary crossword set improperly.";
+        printDebug(msg);
+    }
+    }
+}
+
 void loop() {
     struct tm timeinfo;
     if (getLocalTime(&timeinfo)) {
@@ -81,7 +107,7 @@ void loop() {
             } else {
                 TaskHandle_t handle;
                 xTaskCreate(threadBlink, "blink", 1024, (void *)-1, 1, &handle);
-                getAndPrintCrossword();
+                printPrimaryCrossword();
                 vTaskDelete(handle);
                 digitalWrite(BUTT_LED, LOW);
             }
@@ -109,17 +135,14 @@ void loop() {
             char msg[256];
             sprintf(msg,
                     "Tried to print, but was not connected to WiFi network: %s and "
-                    "password: %s. Please try again.",
+                    "password: %s or could not get time. Please try again.",
                     ssid, wifi_pass);
-            printDebug(msg);
-        } else if (strlen(nyts) <= 5) { // "" or "NYT-S"
-            char msg[32] = "NYT-S Cookie not set";
             printDebug(msg);
         } else {
             Serial.println("Printing Start");
             TaskHandle_t handle;
             xTaskCreate(threadBlink, "blink", 1024, (void *)-1, 1, &handle);
-            getAndPrintCrossword();
+            printPrimaryCrossword();
             vTaskDelete(handle);
             digitalWrite(BUTT_LED, LOW);
         }

@@ -1,39 +1,11 @@
+#include "board.h"
 #include "globals.h"
 #include "util.h"
-#include "wifi_setup.h"
 #include <Adafruit_Thermal.h>
 #include <Arduino.h>
-#include <ArduinoJson.h>
-#include <HTTPClient.h>
-#include <Preferences.h>
-#include <WiFi.h>
-#include <WiFiClientSecure.h>
-#include <WiFiManager.h>
 #include <optional>
 #include <time.h>
 #include <vector>
-
-struct Square {
-    unsigned int row;
-    unsigned int col;
-    unsigned int data; // 0 means filled in
-};
-
-struct Clue {
-    unsigned int num;
-    String data;
-};
-
-struct Grid {
-    unsigned int height;
-    unsigned int width;
-    time_t puzz_epoch;
-    // not "constructors" because that means something else
-    std::vector<String> authors;
-    std::vector<Square> square_data;
-    std::vector<Clue> across_clues;
-    std::vector<Clue> down_clues;
-};
 
 const unsigned char nums[10][32] = {
     {0xff, 0xff, 0xfc, 0x7f, 0xf9, 0x3f, 0xf3, 0x9f, 0xf7, 0x9f, 0xf7,
@@ -68,11 +40,19 @@ const unsigned char nums[10][32] = {
      0xf3, 0x3f, 0xf8, 0x7f, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff},
 };
 
-bool read_num_bit(int num, int i, int j) {
+bool readNumBit(int num, int i, int j) {
     int idx = 16 * j + i;
     int b = idx / 8;
     char offset = 1 << (7 - (idx % 8));
     return (nums[num][b] & offset) ? 1 : 0;
+}
+
+bool validateAscii(String &s) {
+    for (unsigned char c : s) {
+        if (c > 127)
+            return false;
+    }
+    return true;
 }
 
 void printGridDataSerial(Grid d) {
@@ -99,141 +79,6 @@ void printGridDataSerial(Grid d) {
     for (auto p : d.down_clues) {
         Serial.printf("%d: %s\n", p.num, p.data.c_str());
     }
-}
-
-std::optional<Grid> getGridData() {
-    char url[128];
-    char date[32];
-    WiFiClientSecure client;
-    HTTPClient http;
-    time_t puzz_epoch = time(NULL);
-    if (!getDateString(date, false)) {
-        return {};
-    }
-    sprintf(url, "https://www.nytimes.com/svc/crosswords/v6/puzzle/mini/%s.json", date);
-    Serial.println(url);
-
-    http.setFollowRedirects(HTTPC_STRICT_FOLLOW_REDIRECTS);
-    client.setInsecure();
-    http.begin(client, url);
-    char nyts_cookie[512];
-    sprintf(nyts_cookie, "NYT-S=%s", nyts);
-    Serial.println(nyts_cookie);
-    http.addHeader("Cookie", nyts_cookie);
-    delay(500);
-    int httpResponseCode = http.GET();
-    if (httpResponseCode == 403) {
-        // http.end();
-        // // try again with tomorrow's date
-        // getDateStringEpoch(date, time(NULL) + 84600, false);
-        // puzz_epoch = time(NULL) + 84600;
-
-        // sprintf(url, "https://www.nytimes.com/svc/crosswords/v6/puzzle/mini/%s.json",
-        //         date);
-        // Serial.println("Trying again with tomorrow's date");
-        // Serial.println(url);
-        // client.clear();
-        // http.begin(client, url);
-        // delay(500);
-        // httpResponseCode = http.GET();
-        char msg[64];
-        sprintf(msg, "Failed to get NYT data. HTTP response: %d\n", httpResponseCode);
-        Serial.println(msg);
-        strcpy(msg, "HTTP got 403. Check your NYT-S token.");
-        printDebug(msg);
-        return {};
-    } else if (httpResponseCode != 200) {
-        char msg[64];
-        sprintf(msg, "Failed to get NYT data. HTTP response: %d\n", httpResponseCode);
-        Serial.println(msg);
-        return {};
-    }
-    NetworkClient *s;
-    s = http.getStreamPtr();
-
-    JsonDocument doc;
-    char start_target[16] = "\"cells\":";
-    char end_target[16] = "SVG";
-
-    Serial.println("Getting JSON");
-    readStreamUntil(s, start_target, 8, NULL, 0, false);
-    strcpy(scratch, "{\"cells\":");
-    int buf_len = readStreamUntil(s, end_target, 3, scratch + 9, SCRATCH_SIZE, false);
-    scratch[9 + buf_len - 5] = '}';
-    scratch[9 + buf_len - 4] = 0;
-    Serial.println("Parsing JSON");
-
-    DeserializationError error = deserializeJson(doc, scratch);
-    if (error) {
-        Serial.println("JSON parsing clues failed: ");
-        Serial.println(error.c_str());
-        return {};
-    }
-
-    Grid data;
-    data.height = doc["dimensions"]["height"].as<int>();
-    data.width = doc["dimensions"]["width"].as<int>();
-    data.puzz_epoch = puzz_epoch;
-    data.square_data = {};
-    data.authors = {};
-    data.across_clues = {};
-    data.down_clues = {};
-    for (int j = 0; j < data.height; j++) {
-        for (int i = 0; i < data.width; i++) {
-            int idx = i + data.width * j;
-            if (doc["cells"][idx] && doc["cells"][idx].as<JsonObject>().size() == 0) {
-                Square d;
-                d.row = j;
-                d.col = i;
-                d.data = 0;
-                data.square_data.push_back(d);
-            } else if (doc["cells"][idx]["label"]) {
-                int label = atoi(doc["cells"][idx]["label"].as<String>().c_str());
-                Square d;
-                d.row = j;
-                d.col = i;
-                d.data = label;
-                data.square_data.push_back(d);
-            }
-        }
-    }
-    for (auto clue : doc["clues"].as<JsonArray>()) {
-        String direction = clue["direction"].as<String>();
-        int label = atoi(clue["label"].as<String>().c_str());
-        String text = clue["text"][0]["plain"].as<String>();
-        Clue c;
-        c.num = label;
-        c.data = text;
-        if (strcmp(direction.c_str(), "Across") == 0) {
-            data.across_clues.push_back(c);
-        } else {
-            data.down_clues.push_back(c);
-        }
-    }
-    Serial.println("Parsed first bit");
-
-    doc.clear();
-    strcpy(start_target, "\"constructors\":");
-    strcpy(end_target, "\"copyright\"");
-    Serial.println("Getting second JSON");
-    readStreamUntil(s, start_target, 15, NULL, 0);
-    strcpy(scratch, "{\"constructors\":");
-    int buflen = readStreamUntil(s, end_target, 11, scratch + 16, SCRATCH_SIZE);
-    scratch[16 + buflen - 12] = '}';
-    scratch[16 + buflen - 11] = 0;
-    error = deserializeJson(doc, scratch);
-    if (error) {
-        Serial.println("JSON parsing constructors failed: ");
-        Serial.println(error.c_str());
-        return {};
-    }
-    for (auto author : doc["constructors"].as<JsonArray>()) {
-        String a = author.as<String>();
-        data.authors.push_back(a);
-    }
-
-    printGridDataSerial(data);
-    return data;
 }
 
 void writeScratchBit(int idx) {
@@ -292,7 +137,7 @@ void writeSquare(int col, int square_dim, int data) {
     if (data <= 9) {
         for (int j = 0; j < 16; j++) {
             for (int i = 0; i < 16; i++) {
-                if (!read_num_bit(data, i, j)) {
+                if (!readNumBit(data, i, j)) {
                     int idx =
                         col * square_dim + (i + offset) + ((j + offset) * board_px);
                     writeScratchBitLogical(idx);
@@ -306,11 +151,11 @@ void writeSquare(int col, int square_dim, int data) {
     int d2 = data % 10;
     for (int j = 0; j < 16; j++) {
         for (int i = 0; i < 16; i++) {
-            if (!read_num_bit(d1, i, j)) {
+            if (!readNumBit(d1, i, j)) {
                 int idx = col * square_dim + (i + offset) + ((j + offset) * board_px);
                 writeScratchBitLogical(idx);
             }
-            if (!read_num_bit(d2, i, j)) {
+            if (!readNumBit(d2, i, j)) {
                 int idx2 =
                     col * square_dim + (i + 8 + offset) + ((j + offset) * board_px);
                 writeScratchBitLogical(idx2);
@@ -356,10 +201,13 @@ void printHeader(Grid data) {
     printer.boldOn();
     printer.doubleHeightOn();
     printer.doubleWidthOn();
-    printer.println("NYT MINI");
-    printer.boldOff();
+    printer.println(data.header);
+
     printer.doubleHeightOff();
     printer.doubleWidthOff();
+    if (data.title)
+        printer.println(data.title.value());
+    printer.boldOff();
     char date[32];
     getDateStringEpoch(date, data.puzz_epoch, true);
     printer.println(date);
@@ -429,26 +277,4 @@ void printCrossword(Grid data) {
     printer.println();
     printer.println();
     printer.reset();
-}
-
-void getAndPrintCrossword() {
-    std::optional<Grid> data_opt = std::nullopt;
-    for (int i = 0; i < 3; i++) {
-        data_opt = getGridData();
-        if (data_opt)
-            break;
-        else
-            Serial.printf("Print failed: %d\n", i);
-    }
-
-    if (!data_opt) {
-        char msg[128] = "Failed to get crossword after 3 attempts sorry :( You should "
-                        "take a look at Serial for debugging info";
-        printDebug(msg);
-    } else {
-        digitalWrite(ONBOARD_LED, HIGH);
-        Grid data = data_opt.value();
-        printCrossword(data);
-        digitalWrite(ONBOARD_LED, LOW);
-    }
 }

@@ -59,6 +59,30 @@ int readStreamUntil(WiFiClient *stream, const char *match, int match_len, char *
     return idx;
 }
 
+int readStringUntil(String s, const char *match, int match_len, char *buffer,
+                    int buffer_len, bool dump_chars = false) {
+    int i = 0;
+    int idx = 0;
+    while ((idx < s.length()) && i < match_len &&
+           (buffer == NULL || (idx < (buffer_len - 1)))) {
+        char c = s[idx];
+        if (dump_chars)
+            Serial.print(c);
+        if (c == match[i]) {
+            i += 1;
+        } else {
+            i = 0;
+        }
+        if (buffer != NULL) {
+            buffer[idx] = c;
+        }
+        idx += 1;
+    }
+    if (buffer != NULL)
+        buffer[idx] = 0;
+    return idx;
+}
+
 void printAlign(char *msg, int indent = 0) {
     char buf[TEXT_WIDTH + 1] = ""; // TEXT_WIDTH + NULL-Terminator
     int buf_idx = 0;

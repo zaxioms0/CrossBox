@@ -12,9 +12,12 @@
 #define BUTT_LED 18    // LEFT WIRE
 #define ONBOARD_LED 2
 
+enum CrossType { NYT, Puzzmo };
+
 extern WiFiManager wm;
 extern WiFiManagerParameter print_time_param;
 extern WiFiManagerParameter nyts_param;
+extern WiFiManagerParameter crosstype_param;
 
 extern Preferences prefs;
 extern Adafruit_Thermal printer;
@@ -32,3 +35,4 @@ extern unsigned int ctr;
 extern bool pressed;
 extern char ssid[];
 extern char wifi_pass[];
+extern CrossType primary_cross;
