@@ -59,35 +59,9 @@ int readStreamUntil(WiFiClient *stream, const char *match, int match_len, char *
     return idx;
 }
 
-int readStringUntil(String s, const char *match, int match_len, char *buffer,
-                    int buffer_len, bool dump_chars = false) {
-    int i = 0;
-    int idx = 0;
-    while ((idx < s.length()) && i < match_len &&
-           (buffer == NULL || (idx < (buffer_len - 1)))) {
-        char c = s[idx];
-        if (dump_chars)
-            Serial.print(c);
-        if (c == match[i]) {
-            i += 1;
-        } else {
-            i = 0;
-        }
-        if (buffer != NULL) {
-            buffer[idx] = c;
-        }
-        idx += 1;
-    }
-    if (buffer != NULL)
-        buffer[idx] = 0;
-    return idx;
-}
-
 void printAlign(char *msg, int indent = 0) {
     char buf[TEXT_WIDTH + 1] = ""; // TEXT_WIDTH + NULL-Terminator
     int buf_idx = 0;
-    Serial.println(msg);
-    // Serial.println(strlen(msg));
     char *p = msg;
     const int MAX_WORD_LEN = 256;
     char next_word[MAX_WORD_LEN] = "";
@@ -151,8 +125,8 @@ void printAlign(char *msg, int indent = 0) {
                     buf[buf_idx] = next_word[word_idx];
                     buf_idx += 1;
                     word_idx += 1;
-                    if (buf_idx == 31) {
-                        buf[31] = '-';
+                    if (buf_idx == TEXT_WIDTH - 1) {
+                        buf[TEXT_WIDTH - 1] = '-';
                         Serial.println(buf);
                         printer.println(buf);
                         memset(buf, 0, TEXT_WIDTH + 1);

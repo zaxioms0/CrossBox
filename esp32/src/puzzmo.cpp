@@ -29,7 +29,7 @@ bool inBoundsGrid(std::vector<String> &board, int r, int c) {
 }
 
 std::optional<Grid> getPuzzmoGridData() {
-    char url[64] = "https://www.puzzmo.com/_api/prod/graphql?PlayGameScreenQuery";
+    char url[] = "https://www.puzzmo.com/_api/prod/graphql?PlayGameScreenQuery";
     char date[32];
     WiFiClientSecure client;
     HTTPClient http;
@@ -52,7 +52,6 @@ std::optional<Grid> getPuzzmoGridData() {
     char gameplay_id[32];
     makeGameplayId(gameplay_id, 32);
     http.addHeader("Puzzmo-Gameplay-Id", gameplay_id);
-    delay(500);
 
     char query[] =
         "query PlayGameScreenQuery("
@@ -123,7 +122,6 @@ std::optional<Grid> getPuzzmoGridData() {
         return {};
     }
     JsonObject puzzle_data = doc["data"]["startOrFindGameplay"]["gamePlayed"]["puzzle"];
-    serializeJsonPretty(puzzle_data, Serial);
     String puz_xd = puzzle_data["puzzle"].as<String>();
     Serial.println(puz_xd);
     int start_grid = puz_xd.indexOf("## Grid\n\n") + 9;
@@ -158,7 +156,6 @@ std::optional<Grid> getPuzzmoGridData() {
     int clue_count = 0;
     for (int r = 0; r < grid.height; r++) {
         for (int c = 0; c < grid.width; c++) {
-            Serial.printf("%d, %d\n", r, c);
             if (text_grid[r][c] == '.') {
                 Square s;
                 s.col = c;
@@ -172,16 +169,14 @@ std::optional<Grid> getPuzzmoGridData() {
                     // across clue
                     across_clue = true;
                     clue_count += 1;
-                    Serial.printf("Got across %d\n", clue_count);
                     Square s;
                     s.col = c;
                     s.row = r;
                     s.data = clue_count;
                     grid.square_data.push_back(s);
                 }
-                if (r == 0 || text_grid[r - 1][c] == '.' &&
-                                  inBoundsGrid(text_grid, r + 1, c) &&
-                                  text_grid[r + 1][c] != '.') {
+                if ((r == 0 || text_grid[r - 1][c] == '.') &&
+                    inBoundsGrid(text_grid, r + 1, c) && text_grid[r + 1][c] != '.') {
                     // down clue
                     if (!across_clue) {
                         clue_count += 1;
@@ -191,7 +186,6 @@ std::optional<Grid> getPuzzmoGridData() {
                         s.data = clue_count;
                         grid.square_data.push_back(s);
                     }
-                    Serial.printf("Got down %d\n", clue_count);
                 }
             }
         }
@@ -202,14 +196,14 @@ std::optional<Grid> getPuzzmoGridData() {
     int idx = 0;
     while (idx >= 0 && idx < clues_xd.length() - 1) {
         int old_idx = idx;
-        idx = clues_xd.indexOf('\n', idx+1);
+        idx = clues_xd.indexOf('\n', idx + 1);
         String clue_line = clues_xd.substring(old_idx, idx);
         clue_line.trim();
         if (clue_line.length() == 0)
             continue;
         int period_idx = clue_line.indexOf('.');
         int tilde_idx = clue_line.indexOf('~');
-        int clue_num = atoi(clue_line.substring(1, period_idx + 1).c_str());
+        int clue_num = atoi(clue_line.substring(1, period_idx).c_str());
         Clue clue;
         clue.num = clue_num;
         clue.data = clue_line.substring(period_idx + 2, tilde_idx);
@@ -235,8 +229,8 @@ void getAndPrintPuzzmoCrossword() {
     }
 
     if (!data_opt) {
-        char msg[128] = "Failed to get crossword after 3 attempts sorry :( You should "
-                        "take a look at Serial for debugging info";
+        char msg[] = "Failed to get Puzzmo after 3 attempts sorry :( You should "
+                     "take a look at Serial for debugging info";
         printDebug(msg);
     } else {
         digitalWrite(ONBOARD_LED, HIGH);

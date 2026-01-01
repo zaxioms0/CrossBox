@@ -17,7 +17,7 @@ int print_hr = -1;
 char nyts[256] = "";
 char ssid[64] = "";
 char wifi_pass[64] = "";
-CrossType primary_cross = Puzzmo;
+CrossType primary_cross = NYT;
 
 Adafruit_Thermal printer(&Serial1);
 
@@ -25,11 +25,13 @@ WiFiManager wm;
 WiFiManagerParameter
     print_time_param("printtime",
                      "What time would you like to print automatically? Please enter a "
-                     "number from 0 - 23 for the hour in EST. Or leave blank for no "
+                     "number from 0 - 23 for the hour in EST. Or -1 for no "
                      "automatic printing.",
                      "", 10);
 WiFiManagerParameter nyts_param("nyts", "Please provide your NYT-S cookie", "", 256);
-WiFiManagerParameter crosstype_param("crosstype", "Please enter your preferred crossword. \"NYT\" and \"Puzzmo\" are supported.", "", 32);
-
+WiFiManagerParameter crosstype_param(
+    "crosstype",
+    "Please enter your preferred crossword. \"NYT\" and \"Puzzmo\" are supported.", "",
+    32);
 
 Preferences prefs;

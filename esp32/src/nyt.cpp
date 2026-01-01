@@ -33,7 +33,6 @@ std::optional<Grid> getNYTGridData() {
     sprintf(nyts_cookie, "NYT-S=%s", nyts);
     Serial.println(nyts_cookie);
     http.addHeader("Cookie", nyts_cookie);
-    delay(500);
     int httpResponseCode = http.GET();
     if (httpResponseCode == 403) {
         char msg[64];
@@ -148,7 +147,7 @@ void getAndPrintNYTCrossword() {
     }
 
     if (!data_opt) {
-        char msg[128] = "Failed to get crossword after 3 attempts sorry :( You should "
+        char msg[] = "Failed to get NYT after 3 attempts sorry :( You should "
                         "take a look at Serial for debugging info";
         printDebug(msg);
     } else {

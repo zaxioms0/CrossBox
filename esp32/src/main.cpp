@@ -30,7 +30,6 @@ void setup() {
         WifiSetup();
     }
     wm.setEnableConfigPortal(true);
-    delay(500);
     Serial.println('\n');
     Serial.println("Connection established!");
     configTime(0, 0, "time.google.com", "pool.ntp.org");
@@ -59,9 +58,8 @@ void setup() {
     struct tm timeinfo;
     if (!getLocalTime(&timeinfo)) {
         Serial.println("SETUP FAILED");
-        char msg[128] =
-            "Could not retrieve time at end of startup sequence despite being "
-            "connected to WiFi. Restarting.";
+        char msg[] = "Could not retrieve time at end of startup sequence despite being "
+                     "connected to WiFi. Restarting.";
         printDebug(msg);
         ESP.restart();
     }
@@ -73,7 +71,7 @@ void printPrimaryCrossword() {
     switch (primary_cross) {
     case NYT: {
         if (strlen(nyts) <= 5) { // "" or "NYT-S"
-            char msg[32] = "NYT-S Cookie not set";
+            char msg[] = "NYT-S Cookie not set";
             printDebug(msg);
             break;
         }
@@ -85,7 +83,7 @@ void printPrimaryCrossword() {
         break;
     }
     default: {
-        char msg[64] = "Primary crossword set improperly.";
+        char msg[] = "Primary crossword set improperly.";
         printDebug(msg);
     }
     }
