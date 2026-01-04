@@ -15,10 +15,11 @@ also be access through any browser at IP Address `192.168.4.1`. In this menu you
 - Add NYT-S token (see section)
 - Set a time for automatic printing
 - Switch between NYT Mini and Puzzmo Mini
+
 Settings which are left empty will not be updated.
 
 ### NYT-S Token
-- In order to use the NYT mini, you need to provide an NYT-S cookie. You can aquire it by inspecting element 
+In order to use the NYT mini, you need to provide an NYT-S cookie. You can aquire it by inspecting element 
 on the NYT Mini site, going to storage, then cookies. And there should be an NYT-S cookie which is a base-64 string.
 Make sure you just provide the string without any quotes or "NYT-S" prepended to it.
 
