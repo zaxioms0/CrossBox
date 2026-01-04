@@ -10,13 +10,14 @@
 # Wiring Directions
 All you need is one power rail and one ground rail wired in a clear manner, positive out of the buck converter to one, 
 ground of the buck converter to the other. The power wires of the printer are connected to these rails as well as the VIN
-pin of the ESP32 to power and it's ground to the rail. The wires that depend on specific pins are configured as follows:
+pin of the ESP32 to power and its ground to the ground rail. The wires that depend on specific pins are configured as follows:
 
-- Printer TX to pin 25.
-- Printer RX to pin 26.
-- Button press terminal to pin 19.
-- Button positive LED to pin 18.
-- Button negative LED to pin 5.
+- Printer TX to GPIO 25.
+- Printer RX to GPIO 26.
+- One button press terminal to GPIO 19.
+- Other button press terminal to ground (ESP32 pin or rail).
+- Button positive LED to GPIO 18.
+- Button negative LED to GPIO 5.
 
 If you are using the parts linked above, physical descriptions of the relevant wires/terminals are in [globals.h](src/globals.h).
 
