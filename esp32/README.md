@@ -20,6 +20,10 @@ pin of the ESP32 to power and it's ground to the rail. The wires that depend on 
 
 If you are using the parts linked above, physical descriptions of the relevant wires/terminals are in [globals.h](src/globals.h).
 
+# Software Directions
+I used PlatformIO for all of the library handling. The only important note is you need to change the Baud rate to 9600
+on line 38 of Adafruit_Thermal.cpp when it is downloaded.
+
 # Usage Instructions
 ## Startup
 When the box is plugged in, it will try to connect to the internet. If it succeeds, it will blink 3 times. If it fails,
