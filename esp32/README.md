@@ -17,7 +17,8 @@ also be accessed through any browser at IP Address `192.168.4.1`. In this menu y
 - Set a time for automatic printing
 - Switch between the NYT Mini and Puzzmo Mini
 
-Settings which are left empty will not be updated.
+Settings which are left empty will not be updated. The box will not return to it's normal state until the settings
+are saved (or it loses and regains power).
 
 ### NYT-S Token
 In order to use the NYT mini, you need to provide an NYT-S cookie. You can aquire it by inspecting element 
