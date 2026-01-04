@@ -1,7 +1,8 @@
 # Usage Instructions
 ## Startup
 When the box is plugged in, it will try to connect to the internet. If it succeeds, it will blink 3 times quickly. If it fails,
-it will open up a WiFi network for configuring settings.
+it will open up a WiFi network for configuring settings. Sometimes it will connect to the internet, but fail to obtain the time.
+I think this is due to NTP server rate limiting. If this happens it will print an error message before restarting and trying again.
 
 ## Main Usage
 - Press and release button: print the selected mini crossword.
@@ -9,12 +10,12 @@ it will open up a WiFi network for configuring settings.
 
 ## WiFi Configuration
 During WiFi Configuration, the button will blink slowly. If it is blinking, it means there is a WiFi network called
-`CrossBox Setup` that you can connect to. It should open a captive portal automatically on modern devices, but it can
-also be access through any browser at IP Address `192.168.4.1`. In this menu you can:
-- Set WiFi network and password
-- Add NYT-S token (see section)
+`CrossBox Setup` that you can connect to. Once connected, it should open a captive portal automatically on modern devices (like airplane WiFi), but it can
+also be accessed through any browser at IP Address `192.168.4.1`. In this menu you can:
+- Set the WiFi network and password
+- Add/Change the NYT-S token (see section)
 - Set a time for automatic printing
-- Switch between NYT Mini and Puzzmo Mini
+- Switch between the NYT Mini and Puzzmo Mini
 
 Settings which are left empty will not be updated.
 
