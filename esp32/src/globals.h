@@ -11,6 +11,7 @@
 #define BUTT_LED_OUT 5 // RIGHT WIRE
 #define BUTT_LED 18    // LEFT WIRE
 #define ONBOARD_LED 2
+#define ALI_EXPRESS 1
 
 enum CrossType { NYT, Puzzmo };
 

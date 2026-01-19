@@ -269,6 +269,8 @@ void printClues(Grid data) {
 void printCrossword(Grid data) {
     printer.wake();
     printer.reset();
+    if (ALI_EXPRESS)
+        printer.setHeatConfig(11, 200, 60);
     printHeader(data);
     printer.println();
     printGrid(data);

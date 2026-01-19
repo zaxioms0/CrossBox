@@ -192,6 +192,9 @@ std::optional<Grid> getPuzzmoGridData() {
     }
 
     String clues_xd = puz_xd.substring(puz_xd.indexOf("## Clues\n\n") + 10);
+    if (clues_xd.indexOf("##") != -1) {
+        clues_xd = clues_xd.substring(clues_xd.indexOf("##"));
+    }
     String clue_buf = "";
     int idx = 0;
     while (idx >= 0 && idx < clues_xd.length() - 1) {
