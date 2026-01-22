@@ -53,3 +53,5 @@ If you are using the parts linked above, physical descriptions of the relevant w
 I used PlatformIO for all of the library handling. The only important note is you need to change the Baud rate to 9600
 on line 38 of Adafruit_Thermal.cpp when it is downloaded.
 
+The `ALI_EXPRESS` flag in `globals.h` should be set to `0` for the version of the printer I linked above.
+This is used for a model which doesn't have as good defaults and has some settings that need to be set manually.
