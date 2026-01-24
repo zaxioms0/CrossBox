@@ -29,4 +29,4 @@ struct Grid {
 };
 
 void printCrossword(Grid data);
-void printGridDataSerial(Grid d);
+void printGridDataSerial(Grid data);

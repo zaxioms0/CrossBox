@@ -21,7 +21,7 @@ void makeGameplayId(char *buf, int buf_len) {
     for (int i = 0; i < buf_len - 1; i++) {
         buf[i] = charset[random(sizeof(charset) - 1)];
     }
-    buf[buf_len] = 0;
+    buf[buf_len - 1] = 0;
 }
 
 bool inBoundsGrid(std::vector<String> &board, int r, int c) {
